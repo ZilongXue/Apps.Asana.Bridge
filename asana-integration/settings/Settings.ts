@@ -1,0 +1,73 @@
+import { ISetting, SettingType } from '@rocket.chat/apps-engine/definition/settings';
+
+export enum AppSetting {
+    AsanaClientId = 'asana_client_id',
+    AsanaClientSecret = 'asana_client_secret',
+    AsanaRedirectUri = 'asana_redirect_uri',
+    AsanaWebhookSecret = 'asana_webhook_secret',
+    NotificationColor = 'notification_color',
+    DefaultWorkspace = 'default_workspace',
+}
+
+export const settings: Array<ISetting> = [
+    {
+        id: AppSetting.AsanaClientId,
+        public: false,
+        type: SettingType.STRING,
+        packageValue: '',
+        section: 'Asana API Configuration',
+        i18nLabel: 'Asana Client ID',
+        i18nDescription: 'OAuth Client ID from Asana Developer Console',
+        required: true,
+    },
+    {
+        id: AppSetting.AsanaClientSecret,
+        public: false,
+        type: SettingType.STRING,
+        packageValue: '',
+        section: 'Asana API Configuration',
+        i18nLabel: 'Asana Client Secret',
+        i18nDescription: 'OAuth Client Secret from Asana Developer Console',
+        required: true,
+    },
+    {
+        id: AppSetting.AsanaRedirectUri,
+        public: false,
+        type: SettingType.STRING,
+        packageValue: '',
+        section: 'Asana API Configuration',
+        i18nLabel: 'Asana Redirect URI',
+        i18nDescription: 'OAuth Redirect URI for Asana authentication',
+        required: true,
+    },
+    {
+        id: AppSetting.AsanaWebhookSecret,
+        public: false,
+        type: SettingType.STRING,
+        packageValue: '',
+        section: 'Asana API Configuration',
+        i18nLabel: 'Asana Webhook Secret',
+        i18nDescription: 'Secret for verifying Asana webhook requests',
+        required: true,
+    },
+    {
+        id: AppSetting.NotificationColor,
+        public: true,
+        type: SettingType.COLOR,
+        packageValue: '#FC636B',
+        section: 'Appearance',
+        i18nLabel: 'Notification Color',
+        i18nDescription: 'Color for Asana notifications in Rocket.Chat',
+        required: false,
+    },
+    {
+        id: AppSetting.DefaultWorkspace,
+        public: true,
+        type: SettingType.STRING,
+        packageValue: '',
+        section: 'Asana Configuration',
+        i18nLabel: 'Default Workspace',
+        i18nDescription: 'Default Asana workspace ID to use if not specified',
+        required: false,
+    },
+]; 

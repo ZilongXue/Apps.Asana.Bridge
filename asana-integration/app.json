@@ -1,0 +1,57 @@
+{
+    "id": "d98c9e0a-f101-4891-afbf-29859195e668",
+    "version": "0.0.1",
+    "requiredApiVersion": "^1.44.0",
+    "iconFile": "icon.png",
+    "author": {
+        "name": "Zilong Xue",
+        "homepage": "https://github.com/ZilongXue",
+        "support": "https://github.com/ZilongXue"
+    },
+    "name": "Asana Integration",
+    "nameSlug": "asana-integration",
+    "classFile": "AsanaIntegrationApp.ts",
+    "description": "A Rocket.Chat integration with Asana to provide real-time task notifications, quick commands, and deep linking for seamless project management.",
+    "permissions": [
+        {
+            "name": "ui.interact"
+        },
+        {
+            "name": "slashcommand"
+        },
+        {
+            "name": "networking"
+        },
+        {
+            "name": "persistence"
+        },
+        {
+            "name": "scheduler"
+        },
+        {
+            "name": "api"
+        },
+        {
+            "name": "message.read"
+        },
+        {
+            "name": "message.write"
+        },
+        {
+            "name": "room.read"
+        },
+        {
+            "name": "room.write"
+        },
+        {
+            "name": "ui.registerButtons"
+        },
+        {
+            "name": "oauth-app.read"
+        },
+        {
+            "name": "oauth-app.write"
+        }
+    ],
+    "implements": []
+}

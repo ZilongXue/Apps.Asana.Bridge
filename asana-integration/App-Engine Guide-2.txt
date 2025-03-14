@@ -1,0 +1,1512 @@
+App Settings 
+Documentation
+Apps-Engine
+App Configuration
+App Settings
+Your app may need settings that users must configure after installing it, such as tokens. The settings are displayed on the administration interface for the workspace admin to configure and launch the app. Everything under the Settings menu of the app belongs under the app configuration. This tab contains various fields and instructions that can be filled out. If you have a workspace, you can look at the Settings tab of existing apps on the Marketplace to see different app settings.
+
+Define app settings
+In this section, we will look at the available configuration details.
+
+Here are some key terms you need to familiarize yourself with:
+
+ID - for identifying the settings.
+
+Type - the type of value that will be saved.
+
+Required - whether or not configuring the app is required.
+
+Package value - the default value before the administrator can configure anything.
+
+I18n label - the translated name or description of an app.
+
+You can find further details for these properties in the ISetting interface.
+
+Additionally, here are some categories of configurations that Rocket.Chat supports. Each of these will appear differently within the Settings tab of the app in the marketplace.
+
+Boolean
+
+Code
+
+Color
+
+Font
+
+Number
+
+Select
+
+String
+
+Multi-select
+
+You can create a distinct file containing the configuration settings, in which everything is defined as a basic object. In this file, define each setting separately. In the configurationExtend method, you simply read the file. For each setting, call the provideSetting method, so that each defined setting is read, called, and displayed in the user interface.
+
+This is equivalent to executing the command:
+
+configuration.settings.provideSetting ({
+})
+TypeScriptCopy
+Since your app may have multiple settings, it is preferable to organize them all in a separate file and reference them as required in the app's main file.
+
+Every time the administrator modifies the app's configuration via the Settings panel, the onSettingUpdated method is invoked each time. The method will use the new value to make adjustments as necessary. For instance, you can inform an external service that the parameters have changed and the values have been updated. With onPreSettingUpdate, you will receive both the old and updated settings values.
+
+Example to define app settings
+Let’s use an example to see how this works. We will add settings to a sample app.
+
+First, we will create a folder called config at the app’s root level.
+
+In this folder, we will create a TypeScript file called Settings.ts. In this file, we will define the app settings.
+
+In the settings file, we will begin by defining the list of settings we want the app to have in an enumeration. The file looks something like this:
+
+import { ISetting, SettingType} from '@rocket.chat/apps-engine/definition/settings';
+
+export enum AppSetting {
+    AppDemoOutputChannel = 'appdemo_outputchannel', // here, "AppDemoOutputChannel" is the the setting ID. "appdemo_outputchannel" is the key that can be used to define i18n values.
+    AppDemoString = 'appdemo_string_id',
+    AppDemoBoolean = 'appdemo_boolean',
+    AppDemoCode = 'appdemo_code',
+    AppDemoSelect = 'appdemo_select'
+}
+TypeScriptCopy
+After this, we will add the settings definition, including the type, descriptions, and other properties for each setting.
+
+export const settings: Array<ISetting> = [
+    {
+        id: AppSetting.AppDemoOutputChannel, // referring to the setting ID
+        section: "AppDemo_FeatureSettings", // the name of the section to put this setting under
+        public: true, // Whether this setting is a public setting or not - administrators can see ones which are not public but users can't.
+        type: SettingType.STRING, // the category of the setting
+        value: "#General", // initial value
+        packageValue: "", // the default value
+        hidden: false, // whether this setting must be hidden from the admin. Note that a setting cannot be hidden and required at the same time.
+        i18nLabel: 'AppDemo_OutputChannel', // this is the name of the setting that will appear in the UI
+        i18nDescription: 'AppDemo_OutputChannel_Desc', // you can add a description for the setting to provide additional information to users
+        required: false, // specify whether the setting is a mandatory field or not
+    },
+    {
+        id: AppSetting.AppDemoBoolean,
+        section: "AppDemo_DemoSection",
+        public: true,
+        type: SettingType.BOOLEAN, // the boolean cateogory will be displayed as a toggle button on the UI
+        value: true,
+        packageValue: '',
+        hidden: false,
+        i18nLabel: 'AppDemo_Boolean',
+        required: false,
+    },
+    {
+        id: AppSetting.AppDemoCode,
+        section: "AppDemo_DemoSection",
+        public: true,
+        type: SettingType.CODE, // the code category will be displayed as a code block in the UI
+        value: "some code goes here",
+        packageValue: "", 
+        hidden: false,
+        i18nLabel: 'AppDemo_Code',
+        required: false,
+    },
+    {
+        id: AppSetting.AppDemoSelect,
+        section: "AppDemo_DemoSection",
+        public: true,
+        type: SettingType.SELECT, // the select category will appear as a drop-down menu containing the values
+        values: [{"key": "option1", "i18nLabel": "option_1_label"},{"key": "option2", "i18nLabel": "option_2_label"}], // the list of selectable values when the setting type is "select" or "multi_select"
+        packageValue: "",
+        hidden: false,
+        i18nLabel: 'AppDemo_Select',
+        required: false,
+    },
+    {
+        id: AppSetting.AppDemoString,
+        section: "AppDemo_DemoSection",
+        public: true,
+        type: SettingType.STRING,
+        value: "this is a value string",
+        packageValue: "",
+        hidden: false,
+        i18nLabel: 'AppDemo_String',
+        required: false,
+    },
+]
+TypeScriptCopy
+Refer to the ISetting interface definition. Here, you will find details on additional properties and whether they are required.
+
+Once we have defined the settings, we will call this file from the app’s main class like this:
+
+// ...import files...
+import { settings} from './config/Settings'; // import the settings file that we created
+
+export class SampleApp extends App {
+    constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
+        super(info, logger, accessors);
+    }
+
+    public async extendConfiguration(configuration: IConfigurationExtend, environmentRead: IEnvironmentRead): Promise<void> {
+        await Promise.all(
+            settings.map((setting) =>
+                configuration.settings.provideSetting(setting)
+            )
+        );
+    }
+}
+TypeScriptCopy
+Now deploy the app and access it on your workspace. Go to the App Info page and select the Settings tab. You will find the settings that we defined.
+
+
+
+Additionally, check the logs after updating any settings and saving the changes. Each time a setting is updated, you will find the onSettingUpdated and onPreSettingUpdate methods in the logs.
+
+
+
+By default, the logs show the debug method for an instance.
+
+We can also use the onSettingUpdated and onPreSettingUpdate methods in our app to modify the logs as necessary. After the main class, add the method as follows:
+
+public async onSettingUpdated(setting: ISetting, configurationModify: IConfigurationModify, read: IRead, http: IHttp): Promise<void> {
+        let list_to_log = ["Some Setting was Updated. SUCCESS MESSAGE: ", setting]
+
+        this.getLogger().success(list_to_log);
+        this.getLogger().info(list_to_log);
+        this.getLogger().debug(list_to_log);
+        this.getLogger().warn(list_to_log);
+        this.getLogger().error(list_to_log);
+
+        return super.onSettingUpdated(setting, configurationModify, read, http);
+    }
+TypeScriptCopy
+Now, when a setting is updated, the logs will include the messages we have added. In this example, we have defined the success, info, debug, warn, and error methods. The logs will list all these under the onSettingUpdated tab for the same instance. This shows how you can modify your app's settings and logs according to your needs.
+
+Additional example for your reference: Consider the Jitsi app for Rocket.Chat. The settings.ts file contains the various app settings. These settings are called iteratively in the main app file with extendConfiguration. Here, the onSettingUpdated method is also used to update the app configurations.
+
+Configure security protocols
+It is common in integrations to transmit certain security protocols for API requests. In the case of the Rocket.Chat REST API, these headers are X-Auth-Token and X-User-Id. See the authentication endpoints for more information. It would be desirable if these headers were always set when making API queries. In such situations, it is customary to generate a personal access token in Rocket.Chat and adding configuration parameters to the app makes sense. These are configured in the extendConfiguration method of the app's primary class.
+
+The client ID and client secret are routinely generated by one of the mechanisms for the app settings. You can see this implemented in the settings file of the Notion app integration with Rocket.Chat.
+
+Furthermore, along with defining the app configurations, you can create internationalization files for different languages. Let's look at the details in the next topic.
+
+App Internationalization 
+Documentation
+Apps-Engine
+App Configuration
+App Internationalization
+You can build your app in such a way that it can be adapted to different languages.
+
+Here's what you need to do:
+
+Create a folder named i18n at the root and create .json files with the abbreviation of each language you want your app to support. For example, en.json, pt.json. You can call the same file to translate the content across several app interactions.
+
+In the JSON files, provide the corresponding text in the chosen language against each key. This text is displayed on the UI.
+
+Define the keys that you want to create translations for. You can add these keys for functions such as slash commands, UIKit elements, or app settings.
+
+Examples
+The following points illustrate some examples to show how you can use app internationalization for your apps:
+
+While creating action buttons, in Register a button, we use the labelI18n parameter to name the action button with a key. Then in the Add localization section, we provide the value for this key which is displayed on the UI.
+
+submit.send is a key to send a message to the channel with values as shown below:
+
+i18n/en.json
+
+English
+{
+    "submit.send": "Send Message to Channel"
+}
+JSONCopy
+i18n/pt.json
+
+Portuguese
+{
+    "submit.send": "Enviar Mensagem para o Canal"
+}
+JSONCopy
+The i18n folder of the Jitsi app contains the keys and values for the supported languages.
+
+App Permission System 
+Documentation
+Apps-Engine
+App Configuration
+App Permission System
+Each feature available in the Apps-Engine is mapped to a permission. Adding the permission in the app's manifest ( app.json file) will unlock said feature to be used by the app. For example, if you add the send messages permission to your app's manifest, your app can send messages in the Rocket.Chat server. If your app tries to send a message without having the send messages permission listed in the manifest, Apps-Engine will block the feature, and the app will not be able to perform the desired action.
+
+When installing an app, be it via the Marketplace or installing it manually via zip file, a window asks the user to review the permissions that the app requires to work properly. The user installing the app can either accept and install the app or deny the permissions and not install it.
+
+Add permissions to your app
+In your app's manifest file ( app.json), add the field permissions. It receives a list containing all the permissions that you are asking for. For example:
+
+{
+...
+"permissions": [
+    {
+        "name": "user.read"
+    },
+    {
+        "name": "user.write"
+    },
+    {
+        "name": "upload.read"
+    },
+  ],
+...
+}
+JSONCopy
+List of permissions
+Here is a list of the permissions that you need to add to your app:
+
+Permission
+
+Description
+
+user.read
+
+Access user information
+
+user.write
+
+Modify user information
+
+upload.read
+
+Access files uploaded to the server
+
+upload.write
+
+Upload files to the server
+
+server-setting.read
+
+Access settings in the server
+
+server-setting.write
+
+Modify settings in the server
+
+room.read
+
+Access room information
+
+room.write
+
+Create and modify rooms
+
+role.read
+
+Access user roles
+
+role.write
+
+Modify user roles
+
+message.read
+
+Access messages
+
+message.write
+
+Send and modify messages
+
+moderation.read
+
+Access to read moderation dashboard information
+
+moderation.write
+
+Modify moderation dashboard information
+
+threads.read
+
+Access threads. Effectively allows the app to read all messages in a thread
+
+livechat-status.read
+
+Access Livechat status information
+
+livechat-custom-fields.write
+
+Modify Livechat custom field configuration
+
+livechat-visitor.read
+
+Access Livechat visitor information
+
+livechat-visitor.write
+
+Modify Livechat visitor information
+
+livechat-message.read
+
+Access Livechat message information
+
+livechat-message.write
+
+Modify Livechat message information
+
+livechat-message.multiple
+
+Access to read multiple messages at once
+
+livechat-room.read
+
+Access Livechat room information
+
+livechat-room.write
+
+Modify Livechat room information
+
+livechat-department.read
+
+Access Livechat department information
+
+livechat-department.write
+
+Modify Livechat department information
+
+livechat-department.multiple
+
+Access to read multiple departments at once
+
+env.read
+
+Access minimal information about the server environment
+
+cloud.workspace-token
+
+Access to request the workspace access token to interact with Rocket.Chat's Cloud Systems
+
+ui.interact
+
+Interact with the UI (UIKit)
+
+ui.registerButtons
+
+Use UIKit buttons
+
+scheduler
+
+Register and maintain scheduled jobs
+
+networking
+
+Register and maintain scheduled jobs
+
+persistence
+
+Store internal data in the database
+
+slashcommand
+
+Register new slash commands
+
+video-conference.read
+
+Access to read video conference information
+
+video-conference.write
+
+Modify video conference information
+
+video-conference-provider
+
+Act as a video conference provider in Rocket.Chat
+
+api
+
+Register new HTTP endpoints
+
+oauth-app.read
+
+Access OAuth information
+
+oauth-app.write
+
+Modify OAuth information
+
+For an example of how these permissions are used in apps, refer to the Action Buttons topic.
+
+Default permissions
+Out of the permissions listed above, the following permissions are present by default to ensure backward compatibility for apps that were developed before the permission system was introduced.
+
+    user.read,
+    user.write,
+    
+    upload.read,
+    upload.write,
+    
+    ui.interaction,
+    
+    setting.read,
+    setting.write,
+    
+    room.read,
+    room.write,
+    
+    message.read,
+    message.write,
+    
+    livechat-department.read,
+    livechat-department.write,
+    
+    livechat-room.read,
+    livechat-room.write,
+    
+    livechat-message.read,
+    livechat-message.write,
+    
+    livechat-visitor.read,
+    livechat-visitor.write,
+    
+    livechat-status.read,
+    
+    livechat-custom-fields.write,
+    
+    scheduler.default,
+    networking.default,
+    persistence.default,
+    env.read,
+    command.default,
+    
+    videoConference.provider,
+    videoConference.read,
+    videoConference.write,
+    
+    apis.default
+JSONCopy
+Once an app is on the Rocket.Chat workspace, it goes through several lifecycle phases unique to Rocket.Chat. The phases depend on the capabilities that your app has. To learn about the app lifecycle, head over to the next page.
+
+App Development Lifecycle 
+Documentation
+Apps-Engine
+App Configuration
+App Development Lifecycle
+Now that we know how to create Rocket.Chat apps and extend their functionalities, let's learn about the lifecycle of the apps. For Rocket.Chat apps, app lifecycle refers to the processes involved in enabling an app and the phases it may undergo. The app goes through the lifecycle phases during runtime in a Rocket.Chat server.
+
+To add an app to a Rocket.Chat workspace, you must either download it from our Marketplace or manually upload it to the server. Once an app is introduced to Rocket.Chat, it goes through several phases.
+
+Apart from the typical app development phases such as the design, QA, and release phases, additional Rocket.Chat-specific phases include:
+
+App logging
+
+App deployment
+
+App installation
+
+App testing
+
+In the Rocket.Chat UI, two statuses are displayed for apps, enabled and disabled. In the Logs section of an app, you can see additional statuses and their details which give developers an insight into the app's lifecycle phases. You can control various aspects of the app's lifecycle using the extendable methods from the App class. Let's learn about these methods that represent the various states of a functioning app:
+
+Constructed: The app has just been created or instantiated. There is little an app can do at this point.
+
+Initialize: During this phase, the app is initialized. Here, the app can obtain configuration from the Apps-Engine, register objects, and extend functionality. It indicates that the app's initialize() function was invoked and returned true. This enables the app to govern its internal initialization procedure and override the default one.
+
+async initialize(configurationExtend: IConfigurationExtend, environmentRead: IEnvironmentRead): Promise<void>
+TypeScriptCopy
+extendConfiguration: This method is executed as part of the app's default initialization procedure. The configuration accessor enables the app to provide robust functionality such as API Endpoints and Slash Commands using the configuration accessor.
+
+async extendConfiguration(configuration: IConfigurationExtend, environment: IEnvironmentRead): Promise<void>
+TypeScriptCopy
+Enable: The app will be enabled if the app parameters are configured correctly. This method is executed during the app's activation process. If it returns false, the Apps-Engine stops the enabling process and unloads the app's resources configured during initialization.
+
+Auto_enabled: the app’s onEnable() function is called, returns true, and the app is enabled automatically (at system startup).
+
+Manually_enabled: the app’s onEnable() function is called, returns true, and the app is enabled by the user (such as installing a new app).
+
+async onEnable (environment: IEnvironmentRead, configurationModify: IConfigurationModify): Promise<boolean>
+TypeScriptCopy
+Disable: The app can be disabled, either automatically in response to a system interaction or manually through the marketplace. For instance - when Community workspaces have limitations, the apps will be disabled automatically depending on the limit on the number of apps that can be installed per workspace. If the app is a subscription app, it will be disabled when the subscription expires.
+
+async onDisable(configurationModify: IConfigurationModify): Promise<void>
+TypeScriptCopy
+Several additional app phases associated with disable are as follows:
+
+App Phase
+
+Description
+
+compiler_error_disabled
+
+An error occurred while attempting to compile the app, which rendered it inoperable. Attempts to re-enable it will fail, as it requires an update.
+
+invalid_license_disabled
+
+The app was disabled because its license was invalid.
+
+invalid_installation_disabled
+
+The app was disabled due to an invalid installation or signature validation.
+
+error_disable
+
+The app was disabled due to an unrecoverable error.
+
+manually_disabled
+
+A user manually disabled the application.
+
+invalid_settings_disabled
+
+The app was disabled due to invalid configuration settings.
+
+Install: This is only when the application is manually uploaded as a private app or installed through the marketplace. It only occurs once during installation. After installation, you can send messages to the admin notifying them about the availability of the app or send configuration steps and instructions on how to get started to the user who is installing the app.
+
+async onInstall(context: IAppInstallationContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void>
+TypeScriptCopy
+Uninstall: This phase occurs when a user manually uninstalls an app. This is not feasible to occur automatically. Upon uninstallation, you can use this status to perform housekeeping, notify the server or an external service, or send a message to the user.
+
+public async onUninstall(context: IAppUninstallationContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void>
+TypeScriptCopy
+SettingUpdated: For instance, the settings for an app can include tokens to authenticate with third-party services. When a change is made to such settings, the app can respond accordingly. The onSettingUpdated method is executed when an administrator modifies a setting provided by the app via the app administration page. This occurs following the update of a configuration. You can now retrieve the modified value.
+
+async onSettingUpdated(setting: ISetting, configurationModify: IConfigurationModify, read: IRead, http: IHttp): Promise<void>
+TypeScriptCopy
+PreSettingUpdate: This retrieves a modified parameter's before and after values. For example, if the user modifies a server URL, the app can attempt to connect to the new server to perform validations or seamlessly react to the change.
+
+async onPreSettingUpdate(context: ISettingUpdateContext, configurationModify: IConfigurationModify, read: IRead, http: IHttp): Promise<ISetting>
+TypeScriptCopy
+We have now taken a look at the various states of an app and the methods that represent them. With these methods, you can perform different actions for the states of the apps.
+
+
+
+Increment Number Example 
+Documentation
+Apps-Engine
+App Data Persistence
+Increment Number Example
+In this example, we will create an app that increments the value of a number. Users will send a slash command with a number as an argument. Initially, the number’s value is incremented from 0 and stored. After that, each time the slash command is used, the new stored value is incremented with the specified number.
+
+Create the slash command class
+Create a TypeScript slash command file in your app folder. You can use the following command to generate a template file:
+
+rc-apps generate
+BashCopy
+Select the Slash command extension option and provide a name for the file, for example numberPersis. The file is automatically created in a slashCommands folder located at the root of your app folder.
+
+First, we will give a name to the slash command and create an association using the MISC enumeration model. The class looks like this initially:
+
+import { IHttp, IModify, IPersistence, IPersistenceRead, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import { IApp } from '@rocket.chat/apps-engine/definition/IApp';
+import { RocketChatAssociationModel, RocketChatAssociationRecord } from '@rocket.chat/apps-engine/definition/metadata';
+import { ISlashCommand, SlashCommandContext } from '@rocket.chat/apps-engine/definition/slashcommands/index';
+import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+
+export class numberPersis implements ISlashCommand {
+    app: IApp;
+
+    constructor(app) {
+        this.app = app;
+    }
+    public command = 'numberpersis';
+    public i18nDescription = 'Increment a number';
+    public providesPreview = false;
+    public i18nParamsExample = '';
+    public associations: Array<RocketChatAssociationRecord> = [   // this is the association that will be used to store the value
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'increment_command'),
+    ];
+}
+TypeScriptCopy
+In this class, we will add a function called getValue to read the value of the number:
+
+public async getValue(read: IRead): Promise<any> {   // this function will read the value from the database
+        let result: number;
+        const persistenceRead = read.getPersistenceReader();
+        try {
+            const records: any = (await persistenceRead.readByAssociations(this.associations));
+
+            if (records.length) {
+                result = records[0].value;
+            } else {
+                result = 0;
+            }
+        } catch (err) {
+            console.error(err);
+            return ({
+                success: false,
+                error: err,
+            });
+        }
+
+        return ({
+            success: true,
+            result,
+        });
+    }
+TypeScriptCopy
+From the IRead interface, the getPersistenceReader method is used to read the number. If a valid number exists in the record, it is stored in the variable result. Otherwise, the result is zero.
+
+Now we will add an executor function. In this, we will add subcommands to the slash command so that we can get the number from the user or reset its value to zero. We will also add a help subcommand to display the slash command options. The number calculation will be carried out within this function.
+
+public async executor(
+        context: SlashCommandContext,
+        read: IRead,
+        modify: IModify,
+        http: IHttp,
+        persistence: IPersistence,
+    ): Promise<void> {
+
+        const sender = context.getSender();   // the user who sent the command
+        const room = context.getRoom();      // the room where the command was sent
+        const [subcommand] = context.getArguments();    // the subcommand
+        const appBot = await read.getUserReader().getAppUser() as IUser; // the user(bot) who sends relevant message
+
+        const helpText = `use \`/numberpersis [number]\` to increment the value by a given integer. \n` +
+            `use \`/numberpersis [reset|r]\` to reset the value to 0\n` +
+            `use \`/numberpersis [help|h]\` to display this message`;
+
+        if (!subcommand) {  // if no argument is provided
+            var message = `No Subcommand :thinking: \n ${helpText}`;
+            await sendNotification(modify, room, sender, message);
+        } else {
+            switch (subcommand) {
+
+                case 'reset':  // if the user enters the reset argument
+                case 'r':
+                    await persistence.updateByAssociations(this.associations, { value: 0 }, true); // update the value to 0
+                    message = `@${sender.username} reset the value to 0.`;
+                    await sendMessage(modify, room, appBot, message); // calling the sendMessage function
+                    return;
+
+                case 'help':  // if the user enters the help argument
+                case 'h':
+                    await sendNotification(modify, room, sender, helpText); // calling the sendNotification function to display the helptext
+                    return;
+
+                default:
+                    if (isNaN(parseInt(subcommand, 10))) {  // if the subcommand is not a number
+                        message = `@${sender.username} you need to provide a number to increment the value by.`;
+                        await sendNotification(modify, room, sender, message); // calling the sendNotification function to display the helptext
+                        return;
+                    } else {
+                        const initialValue = parseInt(await this.getValue(read).then((value) => value.result), 10);     // get the current value
+                        const finalValue = await initialValue + parseInt(subcommand, 10);                               // calculate the new value
+                        await persistence.updateByAssociations(this.associations, { value: finalValue }, true);         // update the value
+                        message = `@${sender.username} incremented the value of ${initialValue} by ${subcommand}.\n` +
+                            `The new value is ${finalValue} `;
+                        await sendMessage(modify, room, appBot, message);
+                    }
+            }
+        }
+    }
+}
+TypeScriptCopy
+The updateByAssociations method is used to update the record. For details, see the IPersistence interface.
+
+Finally, we will define the sendMessage and sendNotification functions to send messages to the channel. These functions are added after the numberPersis class.
+
+export async function sendMessage(
+    modify: IModify,
+    room: IRoom,
+    sender: IUser,
+    message: string,
+): Promise<string> {
+
+    const msg = modify.getCreator().startMessage()
+        .setSender(sender)
+        .setRoom(room)
+        .setText(message);
+
+    return await modify.getCreator().finish(msg);
+}
+
+export async function sendNotification(
+    modify: IModify,
+    room: IRoom,
+    sender: IUser,
+    message: string
+): Promise<void> {
+    let msg = modify.getCreator().startMessage().setRoom(room).setText(message);
+    // uncomment below if you want the notification to be sent by the sender instead of the app bot user
+    // msg = msg.setSender(sender);
+
+    // lets build a really simple block
+    const block = modify.getCreator().startMessage();
+    // we want this block to have a Text supporting MarkDown
+    block.setBlocks([
+        {
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: message
+            }
+        }
+    ])
+
+    // now let's set the blocks in our message
+    block.setRoom(room).setText(message);
+    // and finally, notify the user with the IMessage
+    return await modify.getNotifier().notifyUser(sender, msg.getMessage());
+}
+TypeScriptCopy
+Update the main app class
+Next, we will update the app’s main class to call the slash command class.
+
+// ...import commands...
+import { numberPersis } from './numberPersis'; // remember to import the class here
+
+export class PersistenceSampleApp extends App {
+    constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
+        super(info, logger, accessors);
+    }
+
+    public async extendConfiguration(configuration: IConfigurationExtend, environmentRead: IEnvironmentRead): Promise<void> {
+        await configuration.slashCommands.provideSlashCommand(
+            new numberPersis(this)
+        )
+    }
+}
+TypeScriptCopy
+Test the app
+Deploy the app to your workspace or package the app and upload it to the workspace.
+
+In any channel, send the slash command /numberPersis. Try sending it without arguments. The app bot should send a message like this:
+
+
+
+Now send the slash command with numbers. For example, /numberPersis 5, and then again with /numberPersis 6. The app bot will return the updated values:
+
+
+
+If you send /numberPersis r or /numberPersis reset, the value will be reset to 0:
+
+
+
+If you send /numberPersis h or /numberPersis help, the help menu will be displayed:
+
+
+
+With this example, we can see how the value is stored and updated using associations.
+
+
+Count Number of Messages Example 
+Documentation
+Apps-Engine
+App Data Persistence
+Count Number of Messages Example
+In this example, we are creating an app that records the number of messages sent on the server using the Persistence object. All messages sent are associated with one record. The app will save the number of messages, which can be viewed from the app logs.
+
+To store the message count, we can write an executePostMessageSent event handler. The app’s main class looks something like this:
+
+import {
+    IAppAccessors,
+    IConfigurationExtend,
+    IEnvironmentRead,
+    IHttp,
+    ILogger,
+    IModify,
+    IPersistence,
+    IRead,
+} from '@rocket.chat/apps-engine/definition/accessors';
+import { App } from '@rocket.chat/apps-engine/definition/App';
+import { IMessage, IPostMessageSent } from '@rocket.chat/apps-engine/definition/messages';
+import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+import { RocketChatAssociationModel, RocketChatAssociationRecord } from '@rocket.chat/apps-engine/definition/metadata';
+import { MessagePersistence } from './MessagePersistence';
+
+export class PersistenceSampleApp extends App implements IPostMessageSent {
+    constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
+        super(info, logger, accessors);
+    }
+public async executePostMessageSent(message: IMessage, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
+    //create a new association to count messages
+    const association = new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message-count');
+    const persis = read.getPersistenceReader();
+    interface RecordItem {
+            count: number;
+        }
+    
+    try {
+        const record = await persis.readByAssociation(association) as RecordItem[];
+        let count = 0;
+
+        if (record.length > 0) {
+            count = record[0].count;
+            this.getLogger().log(`Current count: ${count}`);
+        }
+        count ++;
+        await persistence.updateByAssociation(association, { count }, true);
+
+        //log the number of messages
+        this.getLogger().log(`Updated Message Sent Count: ${count}`);
+    } catch (err) {
+        this.getLogger().error(err);
+    }
+}}
+TypeScriptCopy
+Here,
+
+MISC enumeration is used as the association model for the number of messages.
+
+The count variable temporarily stores the number of messages sent. It is initialized to zero and updated based on data retrieved from persistent storage.
+
+When the executePostMessageSent handler is called, it retrieves the current message count using the readByAssociation method. If a record exists, the count variable is updated accordingly. See the IPersistenceRead interface for details.
+
+Next, the count is incremented by one to account for the newly sent message. Finally, the updated count is saved back to persistent storage using the updateByAssociation method, ensuring the count is preserved across different handler executions. See the IPersistence interface for details.
+
+Deploy the app to your workspace and test it by sending some messages to any channel. Then, check the app logs. The app:executePostMessageSent tabs show the number of messages.
+
+
+
+In this way, even in a cluster environment, your app in each Rocket.Chat instance can share data from a single data source, the Rocket.Chat persistence storage and maintain data consistency.
+
+
+Storing User Input Example 
+Documentation
+Apps-Engine
+App Data Persistence
+Storing User Input Example
+This example will show how to manage the persistence of message-related data using Rocket.Chat Apps-Engine.
+
+Doing this involves creating a class MessagePersistence in the Apps root folder that interacts with Rocket.Chat persistence layer. This class will host static methods to add, remove, and query data associated with messages, rooms, and specific IDs.
+
+import { IPersistence, IPersistenceRead } from '@rocket.chat/apps-engine/definition/accessors';
+import { RocketChatAssociationModel, RocketChatAssociationRecord } from '@rocket.chat/apps-engine/definition/metadata';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+
+export class MessagePersistence {
+    // add records
+    public static async persist(persis: IPersistence, room: IRoom, id: string): Promise<boolean> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message'), 
+            new RocketChatAssociationRecord(RocketChatAssociationModel.ROOM, room.id),
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, id),
+        ];
+
+        try {
+            await persis.updateByAssociations(associations, { id }, true);
+        } catch (err) {
+            console.warn(err);
+            return false;
+        }
+
+        return true;
+    }
+
+    // query all records within the "scope" - message
+    public static async findAll(persis: IPersistenceRead): Promise<Array<string>> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message'),
+        ];
+
+        let result: Array<string> = [];
+        try {
+            const records: Array<{ id: string }> = (await persis.readByAssociations(associations)) as Array<{ id: string }>;
+
+            if (records.length) {
+                result = records.map(({ id }) => id);
+            }
+        } catch (err) {
+            console.warn(err);
+        }
+
+        return result;
+    }
+
+    // query all records by room within the "scope" - message
+    public static async findByRoom(persis: IPersistenceRead, room: IRoom): Promise<Array<string>> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message'),
+            new RocketChatAssociationRecord(RocketChatAssociationModel.ROOM, room.id),
+        ];
+
+        let result: Array<string> = [];
+        try {
+            const records: Array<{ id: string }> = (await persis.readByAssociations(associations)) as Array<{ id: string }>;
+
+            if (records.length) {
+                result = records.map(({ id }) => id);
+            }
+        } catch (err) {
+            console.warn(err);
+        }
+
+        return result;
+    }
+
+    // remove all records by room within the "scope" - message
+    public static async removeByRoom(persis: IPersistence, room: IRoom): Promise<boolean> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message'),
+            new RocketChatAssociationRecord(RocketChatAssociationModel.ROOM, room.id),
+        ];
+
+        try {
+            await persis.removeByAssociations(associations);
+        } catch (err) {
+            console.warn(err);
+            return false;
+        }
+
+        return true;
+    }
+
+    // remove all records by id within the "scope" - message
+    public static async removeById(persis: IPersistence, id: string): Promise<boolean> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message'),
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, id),
+        ];
+
+        try {
+            await persis.removeByAssociations(associations);
+        } catch (err) {
+            console.warn(err);
+            return false;
+        }
+
+        return true;
+    }
+
+    // remove all records within the "scope" - message
+    public static async clear(persis): Promise<boolean> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'message'),
+        ];
+
+        try {
+            await persis.removeByAssociations(associations);
+        } catch (err) {
+            console.warn(err);
+            return false;
+        }
+
+        return true;
+    }
+}
+TypeScriptCopy
+The following was achieved from the code block above:
+
+The persist method adds or updates a record in the persistence layer and associates it with a specific room and message ID.
+
+findAll method fetches all records associated with message and returns an array of their IDs.
+
+The findByRoom method retrieves all message IDs associated with a specific room.
+
+removeByRoom method removes all records associated with a specific room within the message scope. It returns true if successful and false otherwise.
+
+removeById deletes all records associated with a specific message ID within the message scope.
+
+clear Deletes all records in the message scope.
+
+The executePostMessageSent class can be modified to the code below:
+
+import { IAppAccessors, IHttp, ILogger, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import { App } from '@rocket.chat/apps-engine/definition/App';
+import { IMessage, IPostMessageSent } from '@rocket.chat/apps-engine/definition/messages';
+import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+
+// Import the MessagePersistence class
+import { MessagePersistence } from './MessagePersistence';
+
+export class MyRocketChatApp extends App implements IPostMessageSent {
+    constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
+        super(info, logger, accessors);
+    }
+
+    public async executePostMessageSent(
+        message: IMessage,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<void> {
+        const room: IRoom = message.room;
+        
+        const messageId: string = message.id ?? 'default-id';
+
+        // Example: Persist the message ID
+        const success = await MessagePersistence.persist(persistence, room, messageId);
+        if (success) {
+            this.getLogger().log(`Message ID ${messageId} persisted successfully.`);
+        } else {
+            this.getLogger().error(`Failed to persist message ID ${messageId}.`);
+        }
+
+        // Example: Retrieve all message IDs
+        const allMessageIds = await MessagePersistence.findAll(read.getPersistenceReader());
+        this.getLogger().log(`All message IDs: ${allMessageIds.join(', ')}`);
+
+        // Example: Remove all messages by room
+        const removeSuccess = await MessagePersistence.removeByRoom(persistence, room);
+        if (removeSuccess) {
+            this.getLogger().log(`All messages in room ${room.id} removed successfully.`);
+        } else {
+            this.getLogger().error(`Failed to remove messages in room ${room.id}.`);
+        }
+    }
+}
+TypeScriptCopy
+Here, the MessagePersistence class is imported, and the methods persist, findAll, and removeByRoom are called to store the message ID, get all the messages stored in the message scope, and delete all the messages associated with the room.
+
+Send a few messages in a channel to observe the code in action. Then, navigate to Marketplace > Private Apps. Select the app you deployed and access the logs. Among the various logs, locate the one labeled executePostMessageSent. Open it, and you should find a message that resembles the following:
+
+
+
+The image above shows the logs after sending messages to the general channel.
+
+
+OAuth2 Client 
+Documentation
+Apps-Engine
+Advanced Features
+OAuth2 Client
+OAuth2 is an open standard that allows applications to access user information without exposing passwords. Rocket.Chat OAuth2 Client simplifies this process by handling the OAuth2 flow with third-party services like Google, GitHub, and others directly within Rocket.Chat.
+
+This document demonstrates using OAuth2 to interact with Google APIs in a Rocket.Chat app.
+
+Prerequisites
+Ensure you have the following:
+
+Create and deploy the app: Start by creating a new Rocket.Chat app. For this example, name it OAuth, and then deploy the app to your workspace.
+
+Set up Google API credentials: In the Google API Console, create authorization credentials to obtain your Client ID and Client Secret.
+
+Configure authorized URLs: In the project’s Google API console, configure the following:
+
+Authorized JavaScript origins: Set the authorized JavaScript origins to the URL of your Rocket.Chat workspace.
+
+Authorized redirect URIs: Set the authorized redirect URIs to the app's API URL. You can find this URL by navigating to the app within your Rocket.Chat workspace, select Details, and then view the APIs section.
+
+OAuth2 client setup
+To set up the OAuth2 client in the Rocket.Chat app, start by importing the necessary modules into the app's main class:
+
+import { IConfigurationExtend } from '@rocket.chat/apps-engine/definition/accessors';
+// New files to be created in the project root folder
+import { OAuth2Service } from './OAuth2Service';
+import { OAuthCommand } from './OAuthCommand';
+
+export class OAuthApp extends App {
+    private oauth2Service: OAuth2Service;
+
+    protected async extendConfiguration(configuration: IConfigurationExtend): Promise<void> {
+        const oauthConfig = {
+            alias: 'test',
+            accessTokenUri: 'https://oauth2.googleapis.com/token',
+            authUri: 'https://accounts.google.com/o/oauth2/v2/auth',
+            refreshTokenUri: 'https://oauth2.googleapis.com/token',
+            revokeTokenUri: 'https://oauth2.googleapis.com/revoke',
+            defaultScopes: ['profile', 'email'],
+        };
+
+        this.oauth2Service = new OAuth2Service(this, oauthConfig);
+        await this.oauth2Service.setup(configuration);
+
+        // Register the slash command and pass the logger
+        configuration.slashCommands.provideSlashCommand(new OAuthCommand(this.oauth2Service, this.getLogger()));
+    }
+}
+TypeScriptCopy
+The code above defines the OAuth2 configuration, which includes the authorization, token endpoints, client ID, client secret, and scopes. The code also imports two files which will be created in the project root folder. These files each have two methods:
+
+OAuth2Service which manages the OAuth2 operations.
+
+OAuthCommand registers the user commands that interact with the OAuth2 service.
+
+OAuth service setup
+Next, create the OAuth2Service.ts file and implement the service that will handle OAuth2 operations:
+
+import { IOAuth2Client } from '@rocket.chat/apps-engine/definition/oauth2/IOAuth2';
+import { createOAuth2Client } from '@rocket.chat/apps-engine/definition/oauth2/OAuth2';
+import { IConfigurationExtend, IPersistence, IRead, IHttp } from '@rocket.chat/apps-engine/definition/accessors';
+import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import { RocketChatAssociationRecord, RocketChatAssociationModel } from '@rocket.chat/apps-engine/definition/metadata';
+
+export class OAuth2Service {
+    private oauthClient: IOAuth2Client;
+
+    constructor(private app: any, private config: any) {
+        this.oauthClient = createOAuth2Client(this.app, this.config);
+    }
+
+    public async setup(configuration: IConfigurationExtend): Promise<void> {
+        try {
+            await this.oauthClient.setup(configuration);
+        } catch (error) {
+            this.app.getLogger().error('[OAuth2Service] setup error', error);
+        }
+    }
+
+    public async getUserAuthorizationUrl(user: IUser): Promise<string> {
+        const url = await this.oauthClient.getUserAuthorizationUrl(user);
+        return url.toString();
+    }
+
+    public async getAccessTokenForUser(user: IUser, read: IRead): Promise<any> {
+        try {
+            const association = new RocketChatAssociationRecord(RocketChatAssociationModel.USER, user.id);
+            const [tokenData] = await read.getPersistenceReader().readByAssociation(association);
+            if (tokenData) {
+                this.app.getLogger().debug(`Token data retrieved for user ${user.username}:`, tokenData);
+                this.app.getLogger().info(`Access token retrieved for user: ${user.username}`);
+                return tokenData;
+            } else {
+                this.app.getLogger().warn(`No access token found for user: ${user.username}`);
+                return null;
+            }
+        } catch (error) {
+            this.app.getLogger().error(`Failed to get access token for user: ${user.username}`, error);
+            throw error;
+        }
+    }
+    public async refreshUserAccessToken(user: IUser, persis: IPersistence): Promise<void> {
+        await this.oauthClient.refreshUserAccessToken(user, persis);
+    }
+
+    public async revokeUserAccessToken(user: IUser, persis: IPersistence): Promise<void> {
+        await this.oauthClient.revokeUserAccessToken(user, persis);
+    }
+
+    public async handleOAuthCallback(user: IUser, code: string, http: IHttp, persis: IPersistence): Promise<void> {
+        try {
+            const response = await http.post(this.config.accessTokenUri, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                data: `code=${code}&client_id=${this.config.clientId}&client_secret=${this.config.clientSecret}&redirect_uri=${this.config.redirectUri}&grant_type=authorization_code`,
+            });
+    
+            if (response.statusCode === 200 && response.data) {
+                const tokenData = response.data;
+                this.app.getLogger().debug(`Token data to be stored for user ${user.username}:`, tokenData);
+                const association = new RocketChatAssociationRecord(RocketChatAssociationModel.USER, user.id);
+                await persis.updateByAssociation(association, tokenData, true);
+                this.app.getLogger().info(`Access token stored for user: ${user.username}`);
+            } else {
+                this.app.getLogger().error(`Failed to get access token: ${response.content}`);
+            }
+        } catch (error) {
+            this.app.getLogger().error(`Failed to handle OAuth callback for user: ${user.username}`, error);
+        }
+    }
+}
+TypeScriptCopy
+Here, the createOAuth2Client method takes in two parameters:
+
+app: The app itself.
+
+options: An object with props as configuration - see the definition documentation for more details.
+
+The setup() method configures the OAuth2Client which is used to access multiple methods like getAccessTokenForUser, revokeUserAccessToken etc., that will handle user-specific OAuth2 operations.
+
+getAccessTokenForUser: Gets the token information for a specific user, if available. This receives the user instance as a parameter and returns data about the authenticated user.
+
+getUserAuthorizationUrl: Returns the authorization URL to which the user must be redirected to authorize access to the application
+
+refreshUserAccessToken: Refreshes the user's access token. This is useful when the user access token has expired.
+
+revokeUserAccessToken: This function revokes the user's access token in the service provider. When successfully executed, users must be authenticated again before using the service.
+
+OAuth command setup
+To enable users to interact with the OAuth2 setup, create a new file named OAuthCommand.ts and define the following slash command:
+
+import { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import { ISlashCommand, SlashCommandContext } from '@rocket.chat/apps-engine/definition/slashcommands';
+import { OAuth2Service } from './OAuth2Service';
+import { ILogger } from '@rocket.chat/apps-engine/definition/accessors';
+
+export class OAuthCommand implements ISlashCommand {
+    public command = 'oauth';
+    public i18nParamsExample = '';
+    public i18nDescription = 'OAuth command for testing';
+    public providesPreview = false;
+
+    constructor(private readonly oauth2Service: OAuth2Service, private readonly logger: ILogger) {}
+
+    public async executor(context: SlashCommandContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence): Promise<void> {
+        const user = context.getSender();
+        const args = context.getArguments();
+    
+        try {
+            if (args[0] === 'token') {
+                // Retrieve and display the access token
+                const tokenData = await this.oauth2Service.getAccessTokenForUser(user, read);
+                if (tokenData && tokenData.token) {
+                    await modify.getNotifier().notifyUser(
+                        user,
+                        modify.getCreator().startMessage()
+                            .setText(`Access token: ${tokenData.token}`)
+                            .setRoom(context.getRoom())
+                            .getMessage()
+                    );
+                } else {
+                    await modify.getNotifier().notifyUser(
+                        user,
+                        modify.getCreator().startMessage()
+                            .setText('No access token found. Please authorize the app first.')
+                            .setRoom(context.getRoom())
+                            .getMessage()
+                    );
+                }
+            } else if (args[0] === 'refresh') {
+                await this.oauth2Service.refreshUserAccessToken(user, persis);
+                await modify.getNotifier().notifyUser(
+                    user,
+                    modify.getCreator().startMessage()
+                        .setText('Access token refreshed successfully.')
+                        .setRoom(context.getRoom())
+                        .getMessage()
+                );
+            } else if (args[0] === 'revoke') {
+                await this.oauth2Service.revokeUserAccessToken(user, persis);
+                await modify.getNotifier().notifyUser(
+                    user,
+                    modify.getCreator().startMessage()
+                        .setText('Access token revoked successfully.')
+                        .setRoom(context.getRoom())
+                        .getMessage()
+                );
+            } else {
+                const authUrl = await this.oauth2Service.getUserAuthorizationUrl(user);
+                await modify.getNotifier().notifyUser(
+                    user,
+                    modify.getCreator().startMessage()
+                        .setText(`Please authorize the app by visiting: ${authUrl}`)
+                        .setRoom(context.getRoom())
+                        .getMessage()
+                );
+            }
+        } catch (error) {
+            this.logger.error('Error executing OAuth command:', error);
+            await modify.getNotifier().notifyUser(
+                user,
+                modify.getCreator().startMessage()
+                    .setText(`An error occurred while processing the OAuth command: ${error.message}`)
+                    .setRoom(context.getRoom())
+                    .getMessage()
+            );
+        }
+    }
+}
+TypeScriptCopy
+The slash command here is oauth which accepts different arguments (token, refresh, revoke) to perform corresponding actions.
+
+To see this app in action, deploy the app and try using these slash commands in the workspace:
+
+/oauth to authorize the app.
+
+/oauth token to get the authorization token.
+
+/oauth refesh to refresh the token.
+
+/oauth revoke to revoke the access.
+
+When the application is successfully authorized, you can verify the app through the third-party apps connected to your Google account. Likewise, when you revoke this access, the app should be subsequently removed.
+
+
+
+Scheduler API 
+Documentation
+Apps-Engine
+Advanced Features
+Scheduler API
+The Scheduler API allows apps to create tasks that run in a defined schedule. These tasks can be one-time events or recurring tasks. It uses agenda.js as the backend, so the schedule syntax and internal processes are all according to its documentation.
+
+The API details are in the Module scheduler definition and this example app can also be used as a guide. Check the app logs to see the example in action.
+
+Add permissions
+As per the permission system, the Schedule API needs the following permission in your app's manifest ( app.json file):
+
+{
+  "permissions": [
+    { "name": "scheduler" }
+  ]
+}
+JSONCopy
+Register jobs (processors)
+To use the Scheduler API you'll need two things:
+
+The functions to be run as jobs (we call them processors).
+
+The schedule in which they run.
+
+This is configured using the app's extendConfiguration method. The processors are registered during the app's startup to make them available for scheduling.
+
+public async extendConfiguration(configuration: IConfigurationExtend) {
+    configuration.scheduler.registerProcessors([
+        {
+            id: 'first',
+            processor: async (jobData) => console.log(`[${ Date() }] this is a task`, jobData),
+        },
+    ]);
+}
+TypeScriptCopy
+The processor is an async function and can receive arguments ( jobData). The arguments are passed during scheduling.
+
+Start a job
+To trigger the registered processor as a job, you must provide:
+
+The id of the processor.
+
+The type of job it will be. The available types are scheduleRecurring (the job runs in an interval) and scheduleOnce (the job runs once using the when keyword).
+
+Starting a job can be done when running a slash command, for example:
+
+// slashcommand class
+public async executor(context: SlashCommandContext, read: IRead, modify: IModify): Promise<void> {
+    // SCHEDULING A RECURRING TASK
+    const task = {
+        id: 'first',
+        interval: '10 seconds',
+        data: { test: true },
+    };
+    await modify.getScheduler().scheduleRecurring(task);
+
+    // SCHEDULING ONETIME TASK
+    const task = {
+        id: 'first',
+        when: '8 seconds',
+    };
+    await modify.getScheduler().scheduleOnce(task);
+}
+TypeScriptCopy
+You can also trigger a job as soon as it gets registered without manual or automated triggering. When you register your processor in the extendConfiguration method, you can pass a prop called startupSetting in the processor's object:
+
+import { StartupType } from '@rocket.chat/apps-engine/definition/scheduler';
+// ...
+
+configuration.scheduler.registerProcessors([
+    {
+        id: 'first',
+        processor: async (jobData) => console.log(`[${ Date() }] this is a task`, jobData),
+        startupSetting: {
+          type: StartupType.ONETIME,
+          when: '20 seconds',
+          data: { test: true },
+        }
+    },
+    {
+        id: 'second',
+        processor: async (jobData) => console.log(`[${ Date() }] this is a task`, jobData),
+        startupSetting: {
+          type: StartupType.RECURRING,
+          interval: '20 seconds',
+        }
+    },
+]);
+TypeScriptCopy
+This indicates that you want that particular processor to be scheduled as soon as it is registered. You can define the "immediate scheduling" as a recurring job ( StartupType.RECURRING) or a one-time job ( StartupType.ONETIME). You can also pass data using the data object. It will work just like when you schedule a task using the modify accessor.
+
+Here, data is not something that's passed to the processor or a function as a living object or executable code. This data is a static piece of data that is passed to the processor's first argument.
+
+The signature of the processor function is as follows:
+
+(jobContext: IJobContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence) => Promise<void>
+TypeScriptCopy
+The first argument is the data object you're passing when actually scheduling the job; ( [k: string]:any). The rest of the arguments are passed when the function is run.
+
+Cancel a job
+To stop a job, all you have to do is pass the ID of the job you want to stop:
+
+const jobId = 'first';
+await modify.getScheduler().cancelJob(jobId);
+TypeScriptCopy
+It will stop the running job (if any).
+
+Cancel all jobs from the app
+To stop all the current running jobs from the app:
+
+await modify.getScheduler().cancelAllJobs();
+
+
+Register API Endpoints 
+Documentation
+Apps-Engine
+Advanced Features
+Register API Endpoints
+This document will show how to register a public API endpoint that receives data from external HTTP requests. The data received from the endpoint will then be forwarded to the #general channel.
+
+Register the API endpoint
+Create a new Rocket.Chat app from scratch using the command rc-apps create and name it RocketChatTester. If the response indicates that rc-apps is an unrecognized command, refer to the getting started document to use Rocket.Chat Apps-Engine.
+
+Once the app is created, open it in your preferred code editor.
+
+In the main class, RocketChatTesterApp.ts, implement the extendConfiguration method. This method uses configuration.api.provideApi to register a new API endpoint new Endpoint(this). Add the following code to achieve this:
+
+// Main App Class
+import { IAppAccessors, IConfigurationExtend, ILogger } from '@rocket.chat/apps-engine/definition/accessors';
+import { ApiSecurity, ApiVisibility } from '@rocket.chat/apps-engine/definition/api';
+import { App } from '@rocket.chat/apps-engine/definition/App';
+import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
+
+import { Endpoint } from './endpoint';
+
+export class RocketChatTester extends App {
+    constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
+        super(info, logger, accessors);
+    }
+
+    public async extendConfiguration(configuration: IConfigurationExtend) {
+        // Register API endpoints
+        await configuration.api.provideApi({
+            visibility: ApiVisibility.PUBLIC,
+            security: ApiSecurity.UNSECURE,
+            endpoints: [new Endpoint(this)],
+        });
+    }
+}
+TypeScriptCopy
+Create the
+endpoint
+class
+The code above imports an Endpoint class from another file. Now, create this file in the root folder of the app and name it endpoint.ts.
+
+// endpoint.ts
+import { HttpStatusCode, IModify, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import { ApiEndpoint, IApiEndpointInfo, IApiRequest, IApiResponse } from '@rocket.chat/apps-engine/definition/api';
+
+export class Endpoint extends ApiEndpoint {
+    public path = 'api';
+
+    public async post(
+        request: IApiRequest, endpoint: IApiEndpointInfo,
+        read: IRead,
+        modify: IModify,
+    ): Promise<IApiResponse> {
+        const body = Object.entries(request.content)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join('\n');
+        const room = await read.getRoomReader().getByName('general');
+
+        if (!room) {
+            return {
+                status: HttpStatusCode.NOT_FOUND,
+                content: `Room "#general" could not be found`,
+            };
+        }
+
+        const messageBuilder = modify.getCreator().startMessage()
+            .setText(body)
+            .setRoom(room);
+        const messageId = await modify.getCreator().finish(messageBuilder);
+
+        return this.success(JSON.stringify({ messageId }));
+    }
+}
+TypeScriptCopy
+The code above sets up the Endpoint class in the RocketChatTesterApp folder. In this endpoint.ts file, the Endpoint class is created by extending the base class ApiEndpoint. The API endpoint's path is defined by assigning the value api to the public path property.
+
+Next, the post method is implemented and executed whenever the API endpoint receives an HTTP POST request from an external service. To forward the received data to the #general channel, the “request” content is accessed via request.content. A message containing this content is then created and sent to the #general channel.
+
+Test the result
+Start by deploying the app. In the App Info > Details > APIs > POST api section, check the complete endpoint URL you registered for the app.
+
+
+The POST API will be different depending on your app ID and the endpoint URL on which the app is deployed.
+
+Open the terminal and use curl to post some data to the endpoint. For example, use the following command snippet:
+
+curl -X POST http://ENDPOINT_URL/api/apps/public/APP_ID/api \
+-H "Content-Type: application/json" \
+-d '{"Jack":"Hello :)", "Lucy":"Hi!"}'
+BashCopy
+Substitute the ENDPOINT_URL and APP_ID with the appropriate values.
+
+Running the command above will return a response with a messageId. The app bot will also send the “data” attached to HTTP Request as a message to the general channel, as shown below:
+
+
+
+
+
