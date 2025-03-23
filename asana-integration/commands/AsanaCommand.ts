@@ -44,7 +44,7 @@ interface AsanaProject {
 export class AsanaCommand implements ISlashCommand {
     public command = 'asana';
     public i18nDescription = 'Interact with Asana';
-    public i18nParamsExample = 'auth | tasks | projects | task <task_id> | summary | logout | help';
+    public i18nParamsExample = 'auth | tasks | projects | task <task_id> | summary | webhook | logout | help';
     public providesPreview = false;
 
     constructor(private readonly app: IAsanaApp) {}
@@ -71,6 +71,9 @@ export class AsanaCommand implements ISlashCommand {
                     } else {
                         await this.sendNotification(modify, room, sender, 'Please provide a task ID: `/asana task <task_id>`');
                     }
+                    break;
+                case 'webhook':
+                    await this.webhookCommand(sender, room, params, read, modify, http, persis);
                     break;
                 case 'summary':
                     await this.summaryCommand(sender, room, read, modify, http);
@@ -532,6 +535,283 @@ export class AsanaCommand implements ISlashCommand {
         }
     }
 
+    private async webhookCommand(sender: IUser, room: IRoom, params: string[], read: IRead, modify: IModify, http: IHttp, persis: IPersistence): Promise<void> {
+        if (!params || params.length === 0) {
+            await this.sendNotification(modify, room, sender, 'Please specify a webhook action: `create`, `list`, or `delete`');
+            return;
+        }
+
+        const action = params[0].toLowerCase();
+        const tokenInfo = await this.app.getOAuth2Service().getAccessTokenForUser(sender, read);
+        
+        if (!tokenInfo) {
+            await this.sendNotification(modify, room, sender, 'You have not authorized Asana yet. Please run `/asana auth` command first.');
+            return;
+        }
+
+        // const apiService = this.app.getApiService();
+
+        switch (action) {
+            case 'create':
+                await this.createWebhook(sender, room, params.slice(1), tokenInfo.access_token, read, modify, http, persis);
+                break;
+            case 'list':
+                await this.listWebhooks(sender, room, tokenInfo.access_token, read, modify, http);
+                break;
+            case 'delete':
+                if (params.length < 2) {
+                    await this.sendNotification(modify, room, sender, 'Please provide a webhook ID to delete: `/asana webhook delete <webhook_id>`');
+                    return;
+                }
+                await this.deleteWebhook(sender, room, params[1], tokenInfo.access_token, read, modify, http, persis);
+                break;
+            default:
+                await this.sendNotification(modify, room, sender, 'Invalid webhook action. Available actions: `create`, `list`, `delete`');
+                break;
+        }
+    }
+
+    private async createWebhook(sender: IUser, room: IRoom, params: string[], accessToken: string, read: IRead, modify: IModify, http: IHttp, persis: IPersistence): Promise<void> {
+        if (!params || params.length === 0) {
+            await this.sendNotification(modify, room, sender, 'Please provide a resource ID (project or workspace ID): `/asana webhook create <resource_id>`');
+            return;
+        }
+
+        const resourceId = params[0];
+        const apiService = this.app.getApiService();
+
+        // verify resource id format and length
+        if (resourceId.length < 10) {
+            await this.sendNotification(modify, room, sender, 'Invalid resource ID format. Too short for a valid resource ID.');
+            return;
+        }
+        if (!/^\d+$/.test(resourceId)) {
+            await this.sendNotification(modify, room, sender, 'Invalid resource ID format. Resource ID should be a numeric value.');
+            return;
+        }
+
+        // get webhook URL
+        let webhookUrl = '';
+        try {
+            const environmentReader = read.getEnvironmentReader();
+            const serverSettings = environmentReader.getServerSettings(); 
+            // TODO: add Site_Url to settings
+            const siteUrl = await serverSettings.getValueById('Site_Url');
+            this.app.getLogger().debug('Site_Url value:', siteUrl);
+            
+            if (!siteUrl) {
+                this.app
+                    .getLogger()
+                    .warn(
+                        "Site_Url setting is not configured, using fallback URL"
+                    );
+                // use fallback URL - should be replaced with actual server URL
+                webhookUrl = `https://ccf1-168-4-66-238.ngrok-free.app/api/apps/public/${this.app.getID()}/webhook`;
+                await this.sendNotification(
+                    modify,
+                    room,
+                    sender,
+                    "Warning: Server URL is not configured. Using fallback URL which may not work. Please set the Site_Url setting."
+                );
+            } else {
+                const appId = this.app.getID();
+                webhookUrl = `${siteUrl}/api/apps/public/${appId}/webhook`;
+            }
+        } catch (settingsError) {
+            this.app.getLogger().error('Error getting server settings:', settingsError);
+            // use fallback URL
+            webhookUrl = `https://ccf1-168-4-66-238.ngrok-free.app/api/apps/public/${this.app.getID()}/webhook`;
+            await this.sendNotification(modify, room, sender, 'Warning: Could not access server settings. Using fallback URL which may not work. Please contact your administrator.');
+        }
+        
+        this.app.getLogger().debug('Using webhook URL:', webhookUrl);
+
+        // verify resource id and permission
+        try {
+            // try fetch project info
+            const projectResponse = await http.get(`https://app.asana.com/api/1.0/projects/${resourceId}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Accept': 'application/json',
+                },
+            });
+            
+            if (projectResponse.statusCode !== 200) {
+                // if not project, try workspace
+                const workspaceResponse = await http.get(`https://app.asana.com/api/1.0/workspaces/${resourceId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Accept': 'application/json',
+                    },
+                });
+                
+                if (workspaceResponse.statusCode !== 200) {
+                    await this.sendNotification(modify, room, sender, `Resource ID ${resourceId} does not appear to be a valid project or workspace ID that you have access to.`);
+                    return;
+                }
+            }
+        } catch (validationError) {
+            this.app.getLogger().error('Error validating resource ID:', validationError);
+            await this.sendNotification(modify, room, sender, `Could not validate resource ID ${resourceId}. Please make sure it's a valid project or workspace ID and that you have access to it.`);
+            return;
+        }
+
+        // create webhook
+        let webhook;
+        try {
+            webhook = await apiService.createWebhook(accessToken, resourceId, webhookUrl, http);
+            this.app.getLogger().debug('Webhook created successfully:', webhook);
+        } catch (webhookError) {
+            this.app.getLogger().error('Error from createWebhook API call:', webhookError);
+            
+            let errorMessage = 'Failed to create webhook.';
+            
+            // try to extract more useful error information
+            if (webhookError instanceof Error) {
+                const errorText = webhookError.message;
+                
+                if (errorText.includes('You do not have access to this resource')) {
+                    errorMessage = `You don't have permission to create webhooks for resource ID: ${resourceId}. Please make sure:
+1. You have admin access to this project or workspace
+2. The resource ID is correct
+3. Your Asana account has sufficient permissions`;
+                } else if (errorText.includes('Invalid resource')) {
+                    errorMessage = `Invalid resource ID: ${resourceId}. Please make sure this is a valid project or workspace ID.`;
+                } else if (errorText.includes('permission')) {
+                    errorMessage = `You don't have permission to create webhooks for resource: ${resourceId}.`;
+                } else if (errorText.includes('already exists')) {
+                    errorMessage = `A webhook for resource ${resourceId} already exists.`;
+                } else {
+                    errorMessage = `Error creating webhook: ${errorText}`;
+                }
+            }
+            
+            await this.sendNotification(modify, room, sender, errorMessage);
+            return;
+        }
+
+        // if webhook created successfully, store the configuration
+        if (webhook && webhook.gid) {
+            try {
+                // Store the webhook configuration in persistence
+                const webhookAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, `webhook_${webhook.gid}`);
+                const userAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.USER, sender.id);
+                const roomAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.ROOM, room.id);
+
+                const webhookData = {
+                    webhookId: webhook.gid,
+                    resourceId: resourceId,
+                    createdBy: sender.id,
+                    roomId: room.id,
+                    createdAt: new Date().toISOString()
+                };
+                
+                this.app.getLogger().debug('Storing webhook configuration:', webhookData);
+
+                // 需要分开存储，因为createWithAssociations方法只接受单一关联
+                await persis.createWithAssociation(webhookData, webhookAssociation);
+                await persis.createWithAssociation(webhookData, userAssociation);
+                await persis.createWithAssociation(webhookData, roomAssociation);
+                
+                // 同时保存用户的访问令牌作为admin_token，用于后续API调用
+                const adminTokenAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'admin_token');
+                await persis.updateByAssociation(adminTokenAssociation, { access_token: accessToken });
+                this.app.getLogger().debug('Stored user token as admin token for future API calls');
+
+                // 另外还将token与webhook关联，以支持多个webhook各自使用不同的token
+                const webhookTokenAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, `webhook_token_${webhook.gid}`);
+                await persis.createWithAssociation({ access_token: accessToken }, webhookTokenAssociation);
+                this.app.getLogger().debug(`Associated token with webhook ID: ${webhook.gid}`);
+
+                // 创建从资源ID到webhook ID的映射关系
+                const resourceWebhookMapAssociation = new RocketChatAssociationRecord(
+                    RocketChatAssociationModel.MISC, 
+                    `resource_webhook_map_${resourceId}`
+                );
+                await persis.createWithAssociation({ webhookId: webhook.gid }, resourceWebhookMapAssociation);
+                this.app.getLogger().debug(`创建了从资源ID ${resourceId} 到webhook ID ${webhook.gid} 的映射关系`);
+
+                await this.sendNotification(modify, room, sender, `Webhook created successfully! Webhook ID: \`${webhook.gid}\`\nNotifications for resource \`${resourceId}\` will be sent to this room.`);
+            } catch (persistError) {
+                this.app.getLogger().error('Error storing webhook configuration:', persistError);
+                await this.sendNotification(modify, room, sender, `Webhook was created with ID: \`${webhook.gid}\`, but there was an error storing the configuration. Notifications may not be properly routed.`);
+            }
+        } else {
+            await this.sendNotification(modify, room, sender, 'Webhook creation failed: Invalid response from Asana API.');
+        }
+    }
+
+    private async listWebhooks(sender: IUser, room: IRoom, accessToken: string, read: IRead, modify: IModify, http: IHttp): Promise<void> {
+        const apiService = this.app.getApiService();
+        
+        // Get user's workspaces
+        const workspaces = await apiService.getWorkspaces(accessToken, http);
+        
+        if (!workspaces || workspaces.length === 0) {
+            await this.sendNotification(modify, room, sender, 'No workspaces found.');
+            return;
+        }
+
+        // Get webhooks for each workspace
+        let allWebhooks: any[] = [];
+        for (const workspace of workspaces) {
+            const webhooks = await apiService.getWebhooks(accessToken, workspace.gid, http);
+            if (webhooks && webhooks.length > 0) {
+                allWebhooks = [...allWebhooks, ...webhooks.map(webhook => ({
+                    ...webhook,
+                    workspace: workspace.name
+                }))];
+            }
+        }
+
+        if (allWebhooks.length === 0) {
+            await this.sendNotification(modify, room, sender, 'No webhooks found.');
+            return;
+        }
+
+        // Get webhook configurations from persistence
+        const userAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.USER, sender.id);
+        const webhookConfigs = await read.getPersistenceReader().readByAssociation(userAssociation);
+
+        // Build message
+        let message = '*Your Asana Webhooks:*\n\n';
+        
+        allWebhooks.forEach((webhook) => {
+            // Find configuration for this webhook
+            const config = webhookConfigs?.find((config: any) => config.webhookId === webhook.gid) as { roomId: string } | undefined;
+            const roomInfo = config ? `Room: ${config.roomId}` : 'Not configured for any room';
+            
+            message += `- **ID:** \`${webhook.gid}\`\n`;
+            // make resource name the bullet point of the resource id
+            message += `- **Resource:** \`${webhook.resource.gid}\` (${webhook.resource.name || 'Unknown'})\n`;
+            message += `- **Workspace:** ${webhook.workspace}\n`;
+            message += `- **Active:** ${webhook.active ? 'Yes' : 'No'}\n`;
+            message += `- **${roomInfo}**\n\n`;
+        });
+
+        message += `Total webhooks: ${allWebhooks.length}`;
+
+        await this.sendNotification(modify, room, sender, message);
+    }
+
+    private async deleteWebhook(sender: IUser, room: IRoom, webhookId: string, accessToken: string, read: IRead, modify: IModify, http: IHttp, persis: IPersistence): Promise<void> {
+        const apiService = this.app.getApiService();
+        
+        // Delete the webhook from Asana
+        const success = await apiService.deleteWebhook(accessToken, webhookId, http);
+        
+        if (!success) {
+            await this.sendNotification(modify, room, sender, `Failed to delete webhook \`${webhookId}\`. Please check the webhook ID and try again.`);
+            return;
+        }
+
+        // Remove the webhook configuration from persistence
+        const webhookAssociation = new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, `webhook_${webhookId}`);
+        await persis.removeByAssociation(webhookAssociation);
+
+        await this.sendNotification(modify, room, sender, `Webhook \`${webhookId}\` deleted successfully.`);
+    }
+
     private async helpCommand(sender: IUser, room: IRoom, modify: IModify): Promise<void> {
         const message = `
 **Asana Integration Help**
@@ -542,6 +822,9 @@ Available commands:
 - \`/asana projects\` - List your Asana projects  
 - \`/asana task <task_id>\` - Show details of a specific task
 - \`/asana summary\` - Show summary of your Asana tasks
+- \`/asana webhook create <resource_id>\` - Create a webhook for a project or workspace
+- \`/asana webhook list\` - List all your webhooks
+- \`/asana webhook delete <webhook_id>\` - Delete a webhook
 - \`/asana logout\` - Logout and remove your Asana authorization
 - \`/asana help\` - Show this help message
 `;
