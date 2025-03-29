@@ -4,7 +4,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/ZilongXue/asana-rocket-integration">
-    <img src="asana-integration/logo.png" alt="Logo" width="600" height="350">
+    <img src="asana-integration/logo.png" alt="Logo" width="600" height="400">
   </a>
 
   <h3 align="center">Integrate Asana with Rocket.Chat</h3>
