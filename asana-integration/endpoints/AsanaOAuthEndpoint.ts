@@ -1,12 +1,10 @@
 import { IHttp, IModify, IPersistence, IRead, ILogger } from '@rocket.chat/apps-engine/definition/accessors';
 import { ApiEndpoint, IApiEndpointInfo, IApiRequest, IApiResponse } from '@rocket.chat/apps-engine/definition/api';
-import { RocketChatAssociationModel, RocketChatAssociationRecord } from '@rocket.chat/apps-engine/definition/metadata';
 import { App } from '@rocket.chat/apps-engine/definition/App';
 import { AsanaOAuth2Service } from '../lib/AsanaOAuth2Service';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
-import { AsanaIntegrationApp } from '../AsanaIntegrationApp';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
 
-// 定义一个接口，包含我们需要的方法
 interface IAsanaApp extends App {
     getLogger(): ILogger;
     getOAuth2Service(): AsanaOAuth2Service;
@@ -27,17 +25,8 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
         http: IHttp,
         persis: IPersistence
     ): Promise<IApiResponse> {
-        const { code, state, error } = request.query;
-        
-        this.app.getLogger().debug('OAuth callback received:', {
-            hasCode: !!code,
-            hasState: !!state,
-            state: state,
-            error: error || 'none',
-            fullQuery: request.query
-        });
-        
-        // 检查是否有错误
+        const { code, state, error} = request.query;
+
         if (error) {
             this.app.getLogger().error('OAuth error returned from Asana:', error);
             return this.success({
@@ -55,16 +44,9 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
         }
 
         try {
-            // 尝试从 state 参数中获取用户 ID
             let actualUser: IUser | undefined = undefined;
             if (state) {
                 actualUser = await this.findUserByState(state, read);
-            }
-            
-            // 如果无法从 state 中获取用户，则使用应用用户作为后备
-            if (!actualUser) {
-                this.app.getLogger().warn('Could not find user from state, falling back to app user');
-                actualUser = await this.app.getAccessors().reader.getUserReader().getAppUser();
             }
             
             if (!actualUser) {
@@ -75,9 +57,17 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
                 });
             }
 
-            this.app.getLogger().debug(`Using user for OAuth callback: ${actualUser.username}`);
+            const roomId = state.split("_")[1];
+            const room = await read.getRoomReader().getById(roomId);
+            if (!room) {
+                this.app.getLogger().error('Room not found');
+                return this.success({
+                    status: 'error',
+                    message: 'Room not found',
+                });
+            }
 
-            // 处理OAuth回调
+            // handle oauth callback
             const oauth2Service = this.app.getOAuth2Service();
             
             if (!oauth2Service) {
@@ -87,14 +77,12 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
                     message: 'Authorization service unavailable. Please contact administrator.',
                 });
             }
-            
+
             try {
-                // 使用实际用户处理回调
                 const success = await oauth2Service.handleOAuthCallback(actualUser, code, state || '', read, http, persis);
                 
                 if (success) {
-                    // 发送成功消息给用户
-                    await this.sendSuccessMessage(actualUser, modify);
+                    await this.sendSuccessMessage(actualUser, modify, room);
                     
                     return this.success({
                         status: 'success',
@@ -138,7 +126,6 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
         http: IHttp,
         persis: IPersistence
     ): Promise<IApiResponse> {
-        // 如果不需要POST请求，可以返回错误
         return this.success({
             status: 'error',
             message: 'Method not supported',
@@ -147,18 +134,14 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
 
     private async findUserByState(state: string, read: IRead): Promise<IUser | undefined> {
         try {
-            this.app.getLogger().debug('Finding user by state:', state);
-            
-            // 尝试解析 state 格式
-            // 新格式: "userId_randomString"
+            // extract user id from state: "userId_randomString"
             const parts = state.split('_');
-            this.app.getLogger().debug(`State parts: ${JSON.stringify(parts)}`);
             
             if (parts.length > 0) {
                 const userId = parts[0];
                 this.app.getLogger().debug(`Extracted user ID from state: ${userId}`);
                 
-                // 尝试通过 ID 查找用户
+                // try to find user by id
                 const user = await read.getUserReader().getById(userId);
                 if (user) {
                     this.app.getLogger().debug(`Found user by ID from state: ${user.username} (ID: ${user.id})`);
@@ -168,23 +151,12 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
                 }
             }
             
-            // 如果上述方法失败，尝试其他方法
-            
-            // 获取当前用户
             const appUser = await this.app.getAccessors().reader.getUserReader().getAppUser();
             if (appUser) {
                 this.app.getLogger().debug('Using app user as fallback:', appUser.username);
                 return appUser;
             }
-            
-            // 尝试获取管理员用户
-            const adminUser = await read.getUserReader().getByUsername('admin');
-            if (adminUser) {
-                this.app.getLogger().debug('Using admin user as fallback:', adminUser.username);
-                return adminUser;
-            }
-            
-            this.app.getLogger().warn('No user found for state:', state);
+                        
             return undefined;
         } catch (error) {
             this.app.getLogger().error('Error finding user by state:', error);
@@ -192,25 +164,28 @@ export class AsanaOAuthEndpoint extends ApiEndpoint {
         }
     }
 
-    private async sendSuccessMessage(user: IUser, modify: IModify): Promise<void> {
+    private async sendSuccessMessage(user: IUser, modify: IModify, room: IRoom): Promise<void> {
         try {
-            // 获取应用用户
-            const appUser = await this.app.getAccessors().reader.getUserReader().getAppUser();
+            // get app user
+            const appUser = await this.app
+                .getAccessors()
+                .reader.getUserReader()
+                .getAppUser();
             if (!appUser) {
                 return;
             }
+            // send success message to user
+            const messageText =
+                "✅ You have successfully authorized the Asana integration! Now you can use the `/asana` command to access your Asana tasks and projects.";
 
-            // 直接向用户发送通知
-            const messageText = '✅ You have successfully authorized the Asana integration! Now you can use the `/asana` command to access your Asana tasks and projects.';
-            
-            await modify.getNotifier().notifyUser(
-                user,
-                modify.getCreator().startMessage()
-                    .setSender(appUser)
-                    .setText(messageText)
-                    .setUsernameAlias('Asana Integration')
-                    .getMessage()
-            );
+            const messageBuilder = modify
+                .getCreator()
+                .startMessage()
+                .setRoom(room)
+                .setSender(appUser)
+                .setText(messageText);
+
+            await modify.getCreator().finish(messageBuilder);
         } catch (error) {
             this.app.getLogger().error('Error sending success message:', error);
         }

@@ -1,15 +1,18 @@
 import { IHttp, ILogger } from '@rocket.chat/apps-engine/definition/accessors';
 import { ApiVisibility, ApiSecurity } from '@rocket.chat/apps-engine/definition/api';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-// Define an interface with the methods we need
 interface IAsanaApp {
     getLogger(): ILogger;
 }
 
 export class AsanaApiService {
     private readonly baseUrl = 'https://app.asana.com/api/1.0';
+    private readonly logger: ILogger;
 
-    constructor(private readonly app: IAsanaApp) {}
+    constructor(private readonly app: IAsanaApp) {
+        this.logger = this.app.getLogger();
+    }
 
     /**
      * Get current user information
@@ -23,11 +26,11 @@ export class AsanaApiService {
             if (response.statusCode === 200 && response.data) {
                 return response.data.data;
             } else {
-                this.app.getLogger().error('Failed to get user:', response.content);
+                this.logger.error('Failed to get user:', response.content);
                 return null;
             }
         } catch (error) {
-            this.app.getLogger().error('Error getting user:', error);
+            this.logger.error('Error getting user:', error);
             return null;
         }
     }
@@ -43,19 +46,19 @@ export class AsanaApiService {
             });
 
             if (workspacesResponse.statusCode !== 200 || !workspacesResponse.data) {
-                this.app.getLogger().error('Failed to get workspaces:', workspacesResponse.content);
+                this.logger.error('Failed to get workspaces:', workspacesResponse.content);
                 return [];
             }
 
             const workspaces = workspacesResponse.data.data;
             if (!workspaces || workspaces.length === 0) {
-                this.app.getLogger().error('No workspaces found');
+                this.logger.error('No workspaces found');
                 return [];
             }
 
             // Use the first workspace
             const workspaceId = workspaces[0].gid;
-            this.app.getLogger().debug(`Using workspace: ${workspaces[0].name} (ID: ${workspaceId})`);
+            this.logger.debug(`Using workspace: ${workspaces[0].name} (ID: ${workspaceId})`);
 
             // Get tasks assigned to the user in the workspace
             const response = await http.get(`${this.baseUrl}/tasks`, {
@@ -71,11 +74,11 @@ export class AsanaApiService {
             if (response.statusCode === 200 && response.data) {
                 return response.data.data;
             } else {
-                this.app.getLogger().error('Failed to get tasks:', response.content);
+                this.logger.error('Failed to get tasks:', response.content);
                 return [];
             }
         } catch (error) {
-            this.app.getLogger().error('Error getting tasks:', error);
+            this.logger.error('Error getting tasks:', error);
             return [];
         }
     }
@@ -91,19 +94,19 @@ export class AsanaApiService {
             });
 
             if (workspacesResponse.statusCode !== 200 || !workspacesResponse.data) {
-                this.app.getLogger().error('Failed to get workspaces:', workspacesResponse.content);
+                this.logger.error('Failed to get workspaces:', workspacesResponse.content);
                 return [];
             }
 
             const workspaces = workspacesResponse.data.data;
             if (!workspaces || workspaces.length === 0) {
-                this.app.getLogger().error('No workspaces found');
+                this.logger.error('No workspaces found');
                 return [];
             }
 
             // Use the first workspace
             const workspaceId = workspaces[0].gid;
-            this.app.getLogger().debug(`Using workspace for projects: ${workspaces[0].name} (ID: ${workspaceId})`);
+            this.logger.debug(`Using workspace for projects: ${workspaces[0].name} (ID: ${workspaceId})`);
 
             // Get projects in the workspace
             const response = await http.get(`${this.baseUrl}/projects`, {
@@ -118,11 +121,11 @@ export class AsanaApiService {
             if (response.statusCode === 200 && response.data) {
                 return response.data.data;
             } else {
-                this.app.getLogger().error('Failed to get projects:', response.content);
+                this.logger.error('Failed to get projects:', response.content);
                 return [];
             }
         } catch (error) {
-            this.app.getLogger().error('Error getting projects:', error);
+            this.logger.error('Error getting projects:', error);
             return [];
         }
     }
@@ -131,22 +134,35 @@ export class AsanaApiService {
      * Get specific task details
      */
     public async getTaskById(accessToken: string, taskId: string, http: IHttp): Promise<any> {
+        if (!accessToken || !taskId) {
+            this.logger.debug('getTaskById: missing access token or task ID');
+            return null;
+        }
+
         try {
             const response = await http.get(`${this.baseUrl}/tasks/${taskId}`, {
-                headers: this.getAuthHeaders(accessToken),
-                params: {
-                    opt_fields: 'name,notes,completed,due_on,assignee,projects',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Accept': 'application/json',
                 },
+                params: {
+                    opt_fields: 'name,completed,due_on,assignee,projects,notes,html_notes,workspace,memberships,parent,tags'
+                }
             });
 
-            if (response.statusCode === 200 && response.data) {
+            if (response.statusCode === HttpStatusCode.OK && response.data && response.data.data) {
+                if (response.data.data.projects) {
+                    response.data.data.projects.forEach((project: any) => {
+                        this.logger.debug(`Project: ${project.name}, Project ID: ${project.gid}`);
+                    });
+                }
                 return response.data.data;
             } else {
-                this.app.getLogger().error(`Failed to get task ${taskId}:`, response.content);
+                this.logger.error(`getTaskById failed: ${response.statusCode}`);
                 return null;
             }
         } catch (error) {
-            this.app.getLogger().error(`Error getting task ${taskId}:`, error);
+            this.logger.error(`getTaskById failed: ${error}`);
             return null;
         }
     }
@@ -167,11 +183,11 @@ export class AsanaApiService {
             if (response.statusCode === 200 && response.data) {
                 return response.data.data;
             } else {
-                this.app.getLogger().error(`Failed to get tasks for project ${projectId}:`, response.content);
+                this.logger.error(`Failed to get tasks for project ${projectId}:`, response.content);
                 return [];
             }
         } catch (error) {
-            this.app.getLogger().error(`Error getting tasks for project ${projectId}:`, error);
+            this.logger.error(`Error getting tasks for project ${projectId}:`, error);
             return [];
         }
     }
@@ -181,22 +197,22 @@ export class AsanaApiService {
      */
     public async createWebhook(accessToken: string, resourceId: string, target: string, http: IHttp): Promise<any> {
         if (!accessToken) {
-            this.app.getLogger().error('No access token provided for createWebhook');
+            this.logger.error('No access token provided for createWebhook');
             throw new Error('Authentication required: No access token provided');
         }
 
         if (!resourceId) {
-            this.app.getLogger().error('No resource ID provided for createWebhook');
+            this.logger.error('No resource ID provided for createWebhook');
             throw new Error('Resource ID is required');
         }
 
         if (!target) {
-            this.app.getLogger().error('No target URL provided for createWebhook');
+            this.logger.error('No target URL provided for createWebhook');
             throw new Error('Target URL is required');
         }
 
         try {
-            this.app.getLogger().debug('Creating webhook with params:', {
+            this.logger.debug('Creating webhook with params:', {
                 resourceId,
                 target,
                 accessToken: accessToken ? '***' : 'undefined'
@@ -232,26 +248,16 @@ export class AsanaApiService {
                 }
             };
 
-            // this.app.getLogger().debug('Webhook request body:', JSON.stringify(requestBody));
-
             // build request options
             const requestOptions = {
                 headers: this.getAuthHeaders(accessToken),
                 data: requestBody,
             };
 
-
             try {
                 // directly use try-catch to wrap HTTP request
                 const response = await http.post(`${this.baseUrl}/webhooks`, requestOptions);
                 
-                this.app.getLogger().debug('Webhook creation raw response:', {
-                    statusCode: response.statusCode,
-                    content: typeof response.content === 'string' ? response.content.substring(0, 500) : JSON.stringify(response.content).substring(0, 500),
-                    hasData: !!response.data,
-                    dataKeys: response.data ? Object.keys(response.data) : []
-                });
-
                 // try to parse response content
                 let responseData;
                 if (response.data) {
@@ -260,11 +266,11 @@ export class AsanaApiService {
                     try {
                         responseData = JSON.parse(response.content);
                     } catch (parseError) {
-                        this.app.getLogger().error('Failed to parse response content:', parseError);
+                        this.logger.error('Failed to parse response content:', parseError);
                     }
                 }
 
-                this.app.getLogger().debug('Parsed response data:', responseData ? JSON.stringify(responseData).substring(0, 500) : 'null');
+                this.logger.debug('Parsed response data:', responseData ? JSON.stringify(responseData).substring(0, 500) : 'null');
 
                 if (response.statusCode === 201 && responseData && responseData.data) {
                     return responseData.data;
@@ -277,7 +283,7 @@ export class AsanaApiService {
                         errorDetail = response.content || 'Unknown error';
                     }
 
-                    this.app.getLogger().error('Failed to create webhook:', {
+                    this.logger.error('Failed to create webhook:', {
                         statusCode: response.statusCode,
                         errorDetail: typeof errorDetail === 'string' ? errorDetail.substring(0, 500) : JSON.stringify(errorDetail).substring(0, 500)
                     });
@@ -285,9 +291,9 @@ export class AsanaApiService {
                     throw new Error(`API returned status ${response.statusCode}: ${errorDetail}`);
                 }
             } catch (httpError) {
-                this.app.getLogger().error('HTTP request error:', httpError);
+                this.logger.error('HTTP request error:', httpError);
                 if (httpError.response) {
-                    this.app.getLogger().error('HTTP response details:', {
+                    this.logger.error('HTTP response details:', {
                         status: httpError.response.status,
                         statusText: httpError.response.statusText,
                         data: httpError.response.data
@@ -296,16 +302,16 @@ export class AsanaApiService {
                 throw new Error(`HTTP request failed: ${httpError.message || 'Unknown error'}`);
             }
         } catch (error) {
-            this.app.getLogger().error('Error creating webhook:', error);
+            this.logger.error('Error creating webhook:', error);
             if (error instanceof Error) {
-                this.app.getLogger().error('Error details:', {
+                this.logger.error('Error details:', {
                     message: error.message,
                     stack: error.stack
                 });
             } else {
-                this.app.getLogger().error('Non-Error object thrown:', JSON.stringify(error));
+                this.logger.error('Non-Error object thrown:', JSON.stringify(error));
             }
-            throw error; // rethrow error to let caller handle it
+            throw error;
         }
     }
 
@@ -325,11 +331,11 @@ export class AsanaApiService {
             if (response.statusCode === 200 && response.data) {
                 return response.data.data;
             } else {
-                this.app.getLogger().error('Failed to get webhooks:', response.content);
+                this.logger.error('Failed to get webhooks:', response.content);
                 return [];
             }
         } catch (error) {
-            this.app.getLogger().error('Error getting webhooks:', error);
+            this.logger.error('Error getting webhooks:', error);
             return [];
         }
     }
@@ -346,11 +352,11 @@ export class AsanaApiService {
             if (response.statusCode === 200) {
                 return true;
             } else {
-                this.app.getLogger().error(`Failed to delete webhook ${webhookId}:`, response.content);
+                this.logger.error(`Failed to delete webhook ${webhookId}:`, response.content);
                 return false;
             }
         } catch (error) {
-            this.app.getLogger().error(`Error deleting webhook ${webhookId}:`, error);
+            this.logger.error(`Error deleting webhook ${webhookId}:`, error);
             return false;
         }
     }
@@ -367,11 +373,11 @@ export class AsanaApiService {
             if (response.statusCode === 200 && response.data) {
                 return response.data.data;
             } else {
-                this.app.getLogger().error('Failed to get workspaces:', response.content);
+                this.logger.error('Failed to get workspaces:', response.content);
                 return [];
             }
         } catch (error) {
-            this.app.getLogger().error('Error getting workspaces:', error);
+            this.logger.error('Error getting workspaces:', error);
             return [];
         }
     }
@@ -389,13 +395,71 @@ export class AsanaApiService {
             });
 
             if (response.statusCode === 200 && response.data) {
+                // log project details
+                this.logger.debug(`Project details: ${JSON.stringify(response.data.data)}`);
                 return response.data.data;
             } else {
-                this.app.getLogger().error(`Failed to get project ${projectId}:`, response.content);
+                this.logger.error(`Failed to get project ${projectId}:`, response.content);
                 return null;
             }
         } catch (error) {
-            this.app.getLogger().error(`Error getting project ${projectId}:`, error);
+            this.logger.error(`Error getting project ${projectId}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Get user details by user ID
+     * @param accessToken Access token for API authentication
+     * @param userId User ID to look up, can be "me", email, or user gid
+     * @param http HTTP service for making requests
+     * @returns User details or null if not found
+     */
+    public async getUserById(accessToken: string, userId: string, http: IHttp): Promise<any> {
+        if (!accessToken) {
+            this.logger.error('getUserById: no access token provided');
+            return null;
+        }
+        
+        if (!userId) {
+            this.logger.error('getUserById: no user ID provided');
+            return null;
+        }
+
+        try {
+            // full request URL and detailed logs
+            const requestUrl = `${this.baseUrl}/users/${userId}`;
+            
+            const headers = {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            };
+            
+            const params = {
+                opt_fields: 'name,email,photo,workspaces'
+            };
+
+            const response = await http.get(requestUrl, {
+                headers: headers,
+                params: params
+            });
+            
+            if (response.statusCode === HttpStatusCode.OK) {
+                if (response.data && response.data.data) {
+                    const userData = response.data.data;
+                    this.logger.debug(`successfully got user data: ${userData.name || 'unknown name'}, email: ${userData.email || 'no email provided'}`);
+                    return userData;
+                } else {
+                    this.logger.error(`API returned 200 status code, but no user data`);
+                    return null;
+                }
+            } else {
+                this.logger.error(`failed to get user, status code: ${response.statusCode}`);
+                return null;
+            }
+        } catch (error) {
+            this.logger.error(`error getting user: ${error}`);
             return null;
         }
     }

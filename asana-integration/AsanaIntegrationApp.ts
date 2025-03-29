@@ -10,7 +10,6 @@ import {
 } from '@rocket.chat/apps-engine/definition/accessors';
 import { App } from '@rocket.chat/apps-engine/definition/App';
 import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
-import { IApiEndpointMetadata } from '@rocket.chat/apps-engine/definition/api';
 import { ApiVisibility, ApiSecurity } from '@rocket.chat/apps-engine/definition/api';
 import { settings } from './settings/Settings';
 import AsanaOAuth2Service from './lib/AsanaOAuth2Service';
@@ -34,17 +33,11 @@ export class AsanaIntegrationApp extends App {
         try {
             await this.extendConfiguration(configurationExtend, environmentRead);
             
-            // 检查设置是否已配置
+            // check settings
             const clientId = await environmentRead.getSettings().getValueById('asana_client_id');
             const clientSecret = await environmentRead.getSettings().getValueById('asana_client_secret');
             const redirectUri = await environmentRead.getSettings().getValueById('asana_redirect_uri');
-            
-            this.getLogger().debug('Asana settings on initialize:', {
-                clientIdSet: !!clientId,
-                clientSecretSet: !!clientSecret,
-                redirectUriSet: !!redirectUri
-            });
-            
+
             this.getLogger().debug('Asana Integration App initialized');
         } catch (error) {
             this.getLogger().error('Error initializing Asana Integration App:', error);
@@ -52,13 +45,13 @@ export class AsanaIntegrationApp extends App {
     }
 
     protected async extendConfiguration(configuration: IConfigurationExtend, environmentRead: IEnvironmentRead): Promise<void> {
-        // 注册设置
+        // register settings
         await Promise.all(settings.map((setting) => configuration.settings.provideSetting(setting)));
         
-        // 注册命令
+        // register commands
         await configuration.slashCommands.provideSlashCommand(new AsanaCommand(this));
         
-        // 注册 API 端点
+        // register API endpoints
         await configuration.api.provideApi({
             visibility: ApiVisibility.PUBLIC,
             security: ApiSecurity.UNSECURE,
@@ -68,14 +61,14 @@ export class AsanaIntegrationApp extends App {
             ],
         });
         
-        // 设置 OAuth2 服务
+        // setup OAuth2 service
         await this.oauth2Service.setup(configuration);
     }
 
     public async onSettingUpdated(setting: any, configurationModify: any, read: any, http: any): Promise<void> {
         this.getLogger().debug(`Setting updated: ${setting.id}`);
         
-        // 当Asana相关设置更新时，重新初始化OAuth2服务
+        // when Asana related settings are updated, reinitialize OAuth2 service
         const asanaSettings = ['asana_client_id', 'asana_client_secret', 'asana_redirect_uri'];
         if (asanaSettings.includes(setting.id)) {
             this.getLogger().debug('Asana API settings updated, reinitializing OAuth2 service');
@@ -86,18 +79,11 @@ export class AsanaIntegrationApp extends App {
     public async onEnable(environmentRead: IEnvironmentRead, configurationModify: any): Promise<boolean> {
         this.getLogger().debug('Asana Integration App enabled');
         
-        // 在应用启用时初始化OAuth2服务
         try {
-            // 检查设置是否已配置
+            // check settings
             const clientId = await environmentRead.getSettings().getValueById('asana_client_id');
             const clientSecret = await environmentRead.getSettings().getValueById('asana_client_secret');
             const redirectUri = await environmentRead.getSettings().getValueById('asana_redirect_uri');
-            
-            this.getLogger().debug('Asana settings on enable:', {
-                clientIdSet: !!clientId,
-                clientSecretSet: !!clientSecret,
-                redirectUriSet: !!redirectUri
-            });
             
             if (!clientId || !clientSecret || !redirectUri) {
                 this.getLogger().warn('Asana settings not configured. OAuth2 service will not be initialized until settings are configured.');
