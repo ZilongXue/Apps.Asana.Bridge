@@ -51,6 +51,9 @@
         },
         {
             "name": "oauth-app.write"
+        },
+        {
+            "name": "server-setting.read"
         }
     ],
     "implements": []

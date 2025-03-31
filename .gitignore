@@ -4,6 +4,10 @@ node_modules/
 # rc-apps package output
 dist/
 
+# ignore proposal files
+proposal.md
+proposal.pdf
+
 # macOS
 .DS_Store
 .AppleDouble

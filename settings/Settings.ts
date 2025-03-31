@@ -7,7 +7,6 @@ export enum AppSetting {
     AsanaWebhookSecret = 'asana_webhook_secret',
     NotificationColor = 'notification_color',
     DefaultWorkspace = 'default_workspace',
-    SiteUrl = 'site_url',
 }
 
 export const settings: Array<ISetting> = [
@@ -69,16 +68,6 @@ export const settings: Array<ISetting> = [
         section: 'Asana Configuration',
         i18nLabel: 'Default Workspace',
         i18nDescription: 'Default Asana workspace ID to use if not specified',
-        required: false,
-    },
-    {
-        id: AppSetting.SiteUrl,
-        public: true,
-        type: SettingType.STRING,
-        packageValue: '',
-        section: 'Asana Configuration',
-        i18nLabel: 'Site URL',
-        i18nDescription: 'URL of the Rocket.Chat server',
         required: false,
     },
 ]; 

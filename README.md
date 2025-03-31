@@ -4,7 +4,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/ZilongXue/asana-rocket-integration">
-    <img src="logo.png" alt="Logo" width="600" height="400">
+    <img src="assets/logo.png" alt="Logo" width="600" height="400">
   </a>
 
   <h3 align="center">Integrate Asana with Rocket.Chat</h3>
@@ -40,6 +40,9 @@ Key features:
 - Associate Rocket.Chat rooms with Asana projects
 - Complete project management tasks without switching applications
 
+## 🧑‍💻 Mentor
+Special thanks to **Gustavo Bauer** for his guidance and support throughout this project.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -56,7 +59,7 @@ npm install -g @rocket.chat/apps-cli
 
 1. Clone the repository
    ```sh
-   git clone https://github.com/ZilongXue/asana-rocket-integration
+   git clone https://github.com/ZilongXue/Apps.Asana.Bridge.git
    ```
 
 2. Install NPM packages
@@ -76,7 +79,6 @@ npm install -g @rocket.chat/apps-cli
    # Asana Client Secret
    # Asana Redirect URI
    # Asana Webhook Secret
-   # Site URL
    ```
 
    These credentials can be obtained from the [Asana Developer Console](https://app.asana.com/0/developer-console). You need to create an OAuth application in Asana and configure permissions.
@@ -95,6 +97,9 @@ After installation, users can interact with Asana using slash commands:
   • Use `/asana projects` to list your Asana projects
   • Use `/asana task <task_id>` to view specific task details
   • Use `/asana webhook` to manage webhook connections with chat rooms
+     - `/asana webhook create <resource_id>` - Create a webhook for a project or workspace
+     - `/asana webhook list` - List all your webhooks
+     - `/asana webhook delete <webhook_id>` - Delete a webhook
   • Use `/asana summary` to get a work summary
   • Use `/asana logout` to disconnect from Asana
   • Use `/asana help` to view this help information

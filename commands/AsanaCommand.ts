@@ -585,13 +585,21 @@ export class AsanaCommand implements ISlashCommand {
         // get webhook URL
         let webhookUrl = '';
         try {
-            const environmentReader = read.getEnvironmentReader();
-            const siteUrl = await environmentReader.getSettings().getValueById('site_url');
-            this.app.getLogger().debug('Site_Url value:', siteUrl);
-            
+            const serverSettings = read
+                .getEnvironmentReader()
+                .getServerSettings();
+            // get site url
+            const siteUrl = await serverSettings.getValueById("Site_Url");
+            this.app.getLogger().debug("Site_Url value:", siteUrl);
+
             if (!siteUrl) {
                 // return error
-                await this.sendNotification(modify, room, sender, 'Warning: Server URL is not configured.');
+                await this.sendNotification(
+                    modify,
+                    room,
+                    sender,
+                    "Warning: Server URL is not configured."
+                );
                 return;
             } else {
                 const appId = this.app.getID();
