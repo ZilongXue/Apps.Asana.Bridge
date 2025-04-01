@@ -644,14 +644,7 @@ export class AsanaCommand implements ISlashCommand {
                 };
                   
                 // delete possible existing mapping relations
-                try {
-                    // delete resource ID to webhook mapping association
-                    const resourceMapAssociation = new RocketChatAssociationRecord(
-                        RocketChatAssociationModel.MISC, 
-                        `resource_webhook_map_${resourceId}`
-                    );
-                    await persis.removeByAssociation(resourceMapAssociation);
-                    
+                try {                    
                     // delete resource_[resourceId] association
                     const resourceAssociation = new RocketChatAssociationRecord(
                         RocketChatAssociationModel.MISC, 
@@ -664,27 +657,13 @@ export class AsanaCommand implements ISlashCommand {
                     this.app.getLogger().debug(`Error removing old mapping relations:`, removeError);
                     // continue execution, because old mapping may not exist
                 }
-
-                // 1. save webhook ID to mapping relation
-                const webhookAssociation = new RocketChatAssociationRecord(
-                    RocketChatAssociationModel.MISC, 
-                    `webhook_${webhook.gid}`
-                );
-                await persis.createWithAssociation(webhookMapping, webhookAssociation);
                 
-                // 2. save resource ID to mapping relation
+                // save resource ID to mapping relation
                 const resourceAssociation = new RocketChatAssociationRecord(
                     RocketChatAssociationModel.MISC, 
                     `resource_${resourceId}`
                 );
                 await persis.createWithAssociation(webhookMapping, resourceAssociation);
-                
-                // 3. save resource ID to webhook ID mapping relation
-                const resourceWebhookMapAssociation = new RocketChatAssociationRecord(
-                    RocketChatAssociationModel.MISC, 
-                    `resource_webhook_map_${resourceId}`
-                );
-                await persis.createWithAssociation({ webhookId: webhook.gid }, resourceWebhookMapAssociation);
                 
                 this.app.getLogger().debug(`Successfully saved webhook configuration, ID: ${webhook.gid}, Resource ID: ${resourceId}, Room ID: ${room.id}`);
                 

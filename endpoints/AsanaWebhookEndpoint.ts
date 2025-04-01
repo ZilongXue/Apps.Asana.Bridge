@@ -655,73 +655,23 @@ export class AsanaWebhookEndpoint extends ApiEndpoint {
                 return action;
         }
     }
-
-    /**
-     * get webhook mapping by webhook ID
-     */
-    private async getWebhookMappingById(webhookId: string, read: IRead): Promise<WebhookMapping | null> {
-        try {
-            this.app.getLogger().debug(`trying to get mapping by webhook ID ${webhookId}`);
-            
-            const webhookAssociation = new RocketChatAssociationRecord(
-                    RocketChatAssociationModel.MISC, 
-                `webhook_${webhookId}`
-            );
-            
-            const mappings = await read.getPersistenceReader().readByAssociation(webhookAssociation);
-            const [mapping] = mappings as [WebhookMapping | undefined];
-            
-            if (mapping) {
-                this.app.getLogger().debug(`found webhook mapping: webhookId=${webhookId}, resourceId=${mapping.resourceId}, roomId=${mapping.roomId}`);
-                return mapping;
-            }
-            
-            this.app.getLogger().debug(`no mapping found for webhook ID ${webhookId}`);
-            return null;
-        } catch (error) {
-            this.app.getLogger().error(`error getting mapping by webhook ID:`, error);
-            return null;
-        }
-    }
-    
+   
     /**
      * get webhook mapping by resource ID
      */
     private async getWebhookMappingByResourceId(resourceId: string, read: IRead): Promise<WebhookMapping | null> {
         try {
-            // try to get webhookId by resource_webhook_map
-            const resourceMapAssociation = new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC, 
-                `resource_webhook_map_${resourceId}`
-            );
-            
-            const resourceMaps = await read.getPersistenceReader().readByAssociation(resourceMapAssociation);
-            const [resourceMap] = resourceMaps as [{ webhookId: string } | undefined];
-            
-            this.app.getLogger().debug(`resource ID ${resourceId} mapping query result: ${JSON.stringify(resourceMap || {})}, total records: ${resourceMaps?.length || 0}`);
-            
-            if (resourceMap && resourceMap.webhookId) {
-                // then get full mapping by webhookId
-                const mappingResult = await this.getWebhookMappingById(resourceMap.webhookId, read);
-                this.app.getLogger().debug(`found mapping by webhookId ${resourceMap.webhookId}: ${mappingResult ? JSON.stringify(mappingResult) : 'null'}`);
-                return mappingResult;
-            }
-            
-            // if the above method doesn't find, try to get full mapping by resource_[resourceId]
-            // TODO: this is a temporary solution, we need to find a better way to get the full mapping
+            // get full mapping by resource_[resourceId]
             const resourceAssociation = new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC, 
                 `resource_${resourceId}`
             );
             
-            const resourceInfos = await read.getPersistenceReader().readByAssociation(resourceAssociation);
-            const [resourceInfo] = resourceInfos as [{ webhookId: string, roomId: string } | undefined];
-            
-            this.app.getLogger().debug(`resource_${resourceId} query result: ${JSON.stringify(resourceInfo || {})}, total records: ${resourceInfos?.length || 0}`);
-            
-            if (resourceInfo && resourceInfo.webhookId) {
-                const mappingResult = await this.getWebhookMappingById(resourceInfo.webhookId, read);
-                this.app.getLogger().debug(`found mapping by resource_${resourceId}: ${mappingResult ? JSON.stringify(mappingResult) : 'null'}`);
+            const mappingResults = await read.getPersistenceReader().readByAssociation(resourceAssociation);
+            const [mappingResult] = mappingResults as [WebhookMapping | undefined];
+
+            if (mappingResult) {
+                this.app.getLogger().debug(`found mapping by resource_${resourceId}: ${JSON.stringify(mappingResult)}`);
                 return mappingResult;
             }
             
